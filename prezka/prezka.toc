@@ -1,0 +1,5 @@
+\babel@toc {polish}{}\relax 
+\beamer@sectionintoc {1}{Problem i dane}{2}{0}{1}
+\beamer@sectionintoc {2}{Metody}{6}{0}{2}
+\beamer@sectionintoc {3}{Wyniki}{10}{0}{3}
+\beamer@sectionintoc {4}{Wnioski}{16}{0}{4}
