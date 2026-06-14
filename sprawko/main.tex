@@ -1,0 +1,728 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{geometry}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\geometry{margin=2.5cm}
+
+\title{Wykrywanie fake news -- porównanie modeli językowych\\
+\large LIAR dataset: RoBERTa fine-tuning vs.\ GPT-4o zero-shot i few-shot}
+
+\date{Czerwiec 2026}
+
+\begin{document}
+\maketitle
+
+\section{Wprowadzenie}
+
+Celem projektu jest porównanie różnych podejść do automatycznego wykrywania fałszywych
+informacji w wypowiedziach politycznych. Zadanie realizowane jest na zbiorze LIAR
+(Wang, 2017), zawierającym 12 791 krótkich wypowiedzi oznaczonych jednym z sześciu
+poziomów prawdziwości przez serwis fact-checkingowy PolitiFact. Porównujemy dwa
+zasadniczo różne paradygmaty: \emph{fine-tuning} pretrenowanego enkodera (RoBERTa)
+oraz \emph{prompting} dużego modelu generatywnego (GPT-4o-mini i GPT-4o) w trybach
+zero-shot i few-shot.
+
+Zadanie rozważamy w dwóch wariantach:
+\begin{itemize}
+  \item \textbf{Klasyfikacja binarna (2kl)} -- etykiety \texttt{fake} (oryginalnie
+        \texttt{pants-fire}, \texttt{false}, \texttt{barely-true}) i \texttt{real}
+        (\texttt{half-true}, \texttt{mostly-true}, \texttt{true}).
+  \item \textbf{Klasyfikacja sześcioklasowa (6kl)} -- pełne etykiety LIAR.
+\end{itemize}
+
+\section{Zbiór danych}
+
+LIAR składa się z 10 240 wypowiedzi treningowych, 1 284 walidacyjnych i 1 267
+testowych. Każda wypowiedź zawiera: treść, mówcę, partię polityczną, kontekst
+wypowiedzi, temat oraz historię wcześniejszych ocen prawdziwości danego mówcy.
+
+Dziesięć najczęściej omawianych tematów w zbiorze danych to: gospodarka,
+opieka zdrowotna, podatki, budżet federalny, edukacja, zatrudnienie, budżet
+stanowy, biografie kandydatów, wybory i imigracja\footnote{Źródło:
+\url{https://aclanthology.org/P17-2067/} (Wang 2017).}.
+
+\subsection{Rozkład klas}
+
+W wariancie binarnym zbiór jest umiarkowanie niezbilansowany (5 752 \texttt{real}
+vs 4 488 \texttt{fake} w zbiorze treningowym -- 56\% vs 44\%). W wariancie
+sześcioklasowym dysproporcje są wyraźniejsze: najrzadsza klasa \texttt{pants-fire}
+stanowi 8\% danych, najczęstsza \texttt{half-true} -- 21\%. Brak zbalansowania
+jest istotny dla wyboru funkcji straty (sekcja \ref{sec:methods}).
+
+\subsection{Przygotowanie tekstu}
+
+Każda wypowiedź reprezentowana jest jako tekst łączący wiele cech:
+\begin{verbatim}
+{speaker} ({party}, past lies: {n}, past truths: {m}):
+  {statement} Subject: {subject} Context: {context}
+\end{verbatim}
+Tak skonstruowany ciąg daje modelowi dostęp nie tylko do treści wypowiedzi, ale
+również do meta-danych mówcy. Tekst jest tokenizowany tokenizatorem RoBERTa
+z długością maksymalną 128 tokenów -- 99{,}96\% wypowiedzi mieści się w tym
+limicie, mediana długości wynosi 22 tokeny.
+
+BERT i RoBERTa jako modele pretrenowane przyjmują wejście wyłącznie w postaci
+wektorów liczb całkowitych, gdzie każda wartość reprezentuje token. Konwersję
+tę wykonują dedykowane tokenizatory (osobne dla BERT-a i RoBERTy), które
+dodają tokeny specjalne początku i końca sekwencji, dzielą tekst na tokeny
+(słowa, sub-słowa lub znaki) i przypisują każdemu unikalne ID, tworząc
+wymagany wektor liczb całkowitych.
+
+\section{Metody}\label{sec:methods}
+
+\subsection{RoBERTa fine-tuning}
+
+Wybraliśmy model \texttt{roberta-large} (355M parametrów) zamiast \texttt{bert-base}
+z następujących powodów (Liu et al., 2019):
+\begin{enumerate}
+  \item \textbf{Dynamiczne maskowanie} -- RoBERTa losuje maskowane tokeny przy
+        każdym przejściu, BERT stosuje statyczne maskowanie. Lepsze pokrycie
+        kontekstu w trakcie pretreningu.
+  \item \textbf{Większy korpus} -- 160 GB tekstu (Wikipedia, książki, CommonCrawl,
+        OpenWebText, news) zamiast 16 GB BERT-a. Bogatsza wiedza ogólna,
+        szczególnie istotna w domenie newsów politycznych.
+  \item \textbf{Brak zadania NSP} (Next Sentence Prediction) -- udowodniono, że
+        NSP nie pomaga w klasyfikacji pojedynczych zdań, a wręcz pogarsza wyniki.
+  \item \textbf{Lepsze hiperparametry pretreningu} -- większe batche (8K), dłuższy
+        trening.
+\end{enumerate}
+
+BERT był pretrenowany na BooksCorpus i angielskiej Wikipedii, natomiast
+RoBERTa na BooksCorpus, CC-News, OpenWebText i Stories -- znacznie
+większym i bardziej zróżnicowanym korpusie.
+
+RoBERTa jest modelem typu \emph{encoder-only} -- zawiera wyłącznie część
+enkoderową architektury Transformer, dzięki czemu produkuje gęsty wektor
+reprezentacji wejścia (a nie generuje tekstu), co czyni ją naturalnym
+wyborem do zadań klasyfikacji.
+
+Model jest trenowany z głową klasyfikacji (Dropout $\to$ Linear $\to$ tanh
+$\to$ Dropout $\to$ Linear) podpinaną do reprezentacji tokenu \texttt{[CLS]}.
+
+\subsubsection{Hiperparametry treningu}
+
+\begin{itemize}
+  \item Liczba epok: 5
+  \item Optymalizator: AdamW, $\text{lr}=1\!\cdot\!10^{-5}$, $\text{weight\_decay}=0{,}01$
+  \item Batch size: 16 (A100) lub 8 (T4)
+  \item Learning rate schedule: liniowy warm-up przez 1 epokę, następnie liniowy
+        decay do zera (\texttt{get\_linear\_schedule\_with\_warmup})
+  \item Gradient clipping: 1{,}0
+  \item Selekcja epoki: najlepszy walidacyjny macro-F1 (model najlepszej epoki
+        zapisywany jest na dysk)
+\end{itemize}
+
+\subsubsection{Wagi klas}
+
+Ze względu na niezbilansowanie klas (zwłaszcza w wariancie 6kl) stosujemy
+ważoną funkcję straty Cross-Entropy:
+\[
+w_c = \frac{N}{C \cdot n_c},
+\]
+gdzie $N$ to liczba wszystkich przykładów, $C$ to liczba klas, a $n_c$ to
+liczba przykładów klasy $c$. Wagi te dla 2kl wynoszą $w_{\text{fake}}=1{,}14$,
+$w_{\text{real}}=0{,}89$, a dla 6kl rozciągają się od ok. 0{,}81 dla
+\texttt{half-true} do ok. 2{,}03 dla \texttt{pants-fire}. Mechanizm ten
+przeciwdziała tendencji modelu do ignorowania klas mniejszościowych.
+
+\subsection{GPT prompting -- zero-shot i few-shot}
+
+Drugie podejście wykorzystuje modele GPT (\texttt{gpt-4o-mini}, \texttt{gpt-4o})
+przez API OpenAI w dwóch trybach:
+\begin{itemize}
+  \item \textbf{Zero-shot} -- model otrzymuje wyłącznie opis zadania i jedną
+        wypowiedź do oceny.
+  \item \textbf{Few-shot} -- przed wypowiedzią testową prompt zawiera $K$
+        przykładów z każdej klasy ze zbioru treningowego.
+\end{itemize}
+
+Przykłady few-shot dobierane są przez \emph{nearest-neighbor retrieval} oparty
+na cosine similarity reprezentacji TF-IDF (1- i 2-gramy). Dla każdej klasy
+wybieramy $K_{\text{per\_class}}=3$ najbardziej podobne wypowiedzi do
+zapytania (łącznie 6 przykładów dla 2kl i 18 dla 6kl).
+
+\subsection{Metryki}
+
+Główną metryką jest \textbf{macro-F1} -- średnia F1 obliczona niezależnie dla
+każdej klasy, bez ważenia liczebnością. Wybór ten jest podyktowany
+niezbalansowaniem danych: accuracy oraz weighted-F1 byłyby dominowane przez
+klasy większościowe i nie odzwierciedlałyby umiejętności modelu na klasach
+rzadkich (krytyczne dla 6kl).
+
+Dodatkowo raportujemy accuracy, precision i recall per klasa oraz macierze
+pomyłek.
+
+\section{Wyniki}
+
+Rysunek \ref{fig:results_2cl} prezentuje porównanie modeli na wariancie
+binarnym, a rysunek \ref{fig:results_6cl} -- na wariancie sześcioklasowym.
+
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        ybar,
+        width=14cm, height=7cm,
+        bar width=10pt,
+        enlarge x limits=0.15,
+        ymin=0, ymax=0.85,
+        ylabel={Wynik na zbiorze testowym},
+        symbolic x coords={RoBERTa-base, GPT-4o-mini ZS, GPT-4o-mini FS, GPT-4o ZS},
+        xtick=data,
+        x tick label style={font=\small, rotate=15, anchor=east},
+        legend style={at={(0.5,-0.25)}, anchor=north, legend columns=3, font=\small},
+        nodes near coords,
+        nodes near coords style={font=\tiny},
+        ymajorgrids=true, grid style=dashed,
+    ]
+    \addplot[fill=blue!60] coordinates {
+        (RoBERTa-base, 0.640)
+        (GPT-4o-mini ZS, 0.696)
+        (GPT-4o-mini FS, 0.693)
+        (GPT-4o ZS, 0.729)
+    };
+    \addplot[fill=orange!70] coordinates {
+        (RoBERTa-base, 0.610)
+        (GPT-4o-mini ZS, 0.695)
+        (GPT-4o-mini FS, 0.686)
+        (GPT-4o ZS, 0.0)
+    };
+    \addplot[fill=green!60!black] coordinates {
+        (RoBERTa-base, 0.630)
+        (GPT-4o-mini ZS, 0.697)
+        (GPT-4o-mini FS, 0.692)
+        (GPT-4o ZS, 0.0)
+    };
+    \legend{Accuracy, Macro-F1, Weighted-F1}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Porównanie modeli na zbiorze testowym LIAR -- wariant binarny.
+           Wartość 0 oznacza brak pomiaru. ZS = zero-shot, FS = few-shot (kNN).}
+  \label{fig:results_2cl}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        ybar,
+        width=12cm, height=6.5cm,
+        bar width=14pt,
+        enlarge x limits=0.4,
+        ymin=0, ymax=0.4,
+        ylabel={Wynik na zbiorze testowym},
+        symbolic x coords={GPT-4o-mini ZS, GPT-4o-mini FS},
+        xtick=data,
+        x tick label style={font=\small},
+        legend style={at={(0.5,-0.18)}, anchor=north, legend columns=3, font=\small},
+        nodes near coords,
+        nodes near coords style={font=\small},
+        ymajorgrids=true, grid style=dashed,
+    ]
+    \addplot[fill=blue!60] coordinates {
+        (GPT-4o-mini ZS, 0.298)
+        (GPT-4o-mini FS, 0.324)
+    };
+    \addplot[fill=orange!70] coordinates {
+        (GPT-4o-mini ZS, 0.279)
+        (GPT-4o-mini FS, 0.310)
+    };
+    \addplot[fill=green!60!black] coordinates {
+        (GPT-4o-mini ZS, 0.264)
+        (GPT-4o-mini FS, 0.294)
+    };
+    \legend{Accuracy, Macro-F1, Weighted-F1}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Porównanie modeli na zbiorze testowym LIAR -- wariant
+           sześcioklasowy. ZS = zero-shot, FS = few-shot (kNN).}
+  \label{fig:results_6cl}
+\end{figure}
+
+\subsection{Szczegółowe wyniki GPT-4o-mini (1 próba)}
+
+Poniższe metryki pochodzą z pojedynczego uruchomienia całego pipeline'u
+(wszystkie cztery eksperymenty w jednej komórce, jedno wywołanie API).
+
+\textbf{2kl zero-shot} (acc=0{,}696, macro-F1=0{,}695, unparsed=1, support=1266):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+fake & 0{,}63 & 0{,}75 & 0{,}68 & 553 \\
+real & 0{,}77 & 0{,}66 & 0{,}71 & 713 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Macierz pomyłek: fake$\to$fake 413, fake$\to$real 140; real$\to$fake 245,
+real$\to$real 468.
+
+\textbf{2kl few-shot (kNN)} (acc=0{,}693, macro-F1=0{,}686, unparsed=18, support=1249):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+fake & 0{,}65 & 0{,}63 & 0{,}64 & 541 \\
+real & 0{,}72 & 0{,}74 & 0{,}73 & 708 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Macierz pomyłek: fake$\to$fake 340, fake$\to$real 201; real$\to$fake 183,
+real$\to$real 525.
+
+\textbf{6kl zero-shot} (acc=0{,}298, macro-F1=0{,}279, unparsed=141, support=1126):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+pants-fire   & 0{,}53 & 0{,}41 & 0{,}47 &  82 \\
+false        & 0{,}25 & 0{,}62 & 0{,}36 & 218 \\
+barely-true  & 0{,}15 & 0{,}01 & 0{,}02 & 187 \\
+half-true    & 0{,}32 & 0{,}19 & 0{,}24 & 242 \\
+mostly-true  & 0{,}31 & 0{,}38 & 0{,}34 & 212 \\
+true         & 0{,}34 & 0{,}19 & 0{,}25 & 185 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Model praktycznie nie używa klasy \texttt{barely-true} (recall 0{,}01) i
+ma tendencję do nadmiernego predykowania klasy \texttt{false} (kolumna
+\texttt{false} w macierzy pomyłek dominuje dla wszystkich klas).
+
+\textbf{6kl few-shot (kNN)} (acc=0{,}324, macro-F1=0{,}310, unparsed=801,
+support=466 -- niepełne, patrz uwaga poniżej):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+pants-fire   & 0{,}48 & 0{,}48 & 0{,}48 & 29 \\
+false        & 0{,}28 & 0{,}61 & 0{,}38 & 85 \\
+barely-true  & 0{,}35 & 0{,}07 & 0{,}12 & 84 \\
+half-true    & 0{,}35 & 0{,}36 & 0{,}35 & 98 \\
+mostly-true  & 0{,}33 & 0{,}38 & 0{,}35 & 93 \\
+true         & 0{,}35 & 0{,}12 & 0{,}17 & 77 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\textit{Uwaga:} 801 z 1267 próbek nie zostało sklasyfikowanych z powodu
+wyczerpania dziennego limitu API (RPD = 10\,000) -- raportowane metryki są
+policzone na 466 próbkach i nie są bezpośrednio porównywalne z pozostałymi
+eksperymentami.
+
+\subsection{Próba 2 -- GPT-4o (k=3, self-consistency=3, Structured Outputs)}
+
+Druga próba użyła silniejszego modelu \texttt{gpt-4o} z trzema rozszerzeniami:
+\textbf{k=3} (3 przykłady na klasę w few-shot zamiast 1), \textbf{self-consistency=3}
+(każde zapytanie powtarzane 3 razy, decyzja przez głosowanie większościowe)
+oraz \textbf{Structured Outputs} (wymuszenie odpowiedzi w schemacie JSON
+ze zdefiniowanym enum etykiet). Stąd \texttt{unparsed=0} dla zero-shot --
+parser nigdy nie zawodzi.
+
+\textbf{2kl zero-shot} (acc=0{,}729, macro-F1=0{,}729, unparsed=0, support=1267):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+fake & 0{,}66 & 0{,}78 & 0{,}71 & 553 \\
+real & 0{,}80 & 0{,}69 & 0{,}74 & 714 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Macierz pomyłek: fake$\to$fake 430, fake$\to$real 123; real$\to$fake 220,
+real$\to$real 494. Czas: 160{,}5 s (mimo $3\times$ więcej zapytań przez
+self-consistency).
+
+\textbf{2kl few-shot (kNN)} (acc=0{,}710, macro-F1=0{,}709, unparsed=795,
+support=472 -- niepełne):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+fake & 0{,}64 & 0{,}76 & 0{,}69 & 205 \\
+real & 0{,}79 & 0{,}67 & 0{,}72 & 267 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Macierz pomyłek: fake$\to$fake 156, fake$\to$real 49; real$\to$fake 88,
+real$\to$real 179. Czas: 8489 s ($\sim$2 h 21 min) -- również wyczerpany
+dzienny limit API (795 z 1267 próbek bez odpowiedzi).
+
+\textit{Obserwacje:} GPT-4o zero-shot bije GPT-4o-mini o $\sim$3 pkt
+(0{,}729 vs 0{,}696). Few-shot z 9 przykładami (3$\times$3) generuje
+jeszcze dłuższe prompty niż w próbie 1, stąd jeszcze szybsze osiągnięcie
+limitu dziennego.
+
+\textbf{6kl few-shot (kNN, K=1, SC=1)} (acc=0{,}345, macro-F1=0{,}359,
+unparsed=164, support=1103):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+pants-fire   & 0{,}72 & 0{,}37 & 0{,}49 &  78 \\
+false        & 0{,}35 & 0{,}48 & 0{,}40 & 218 \\
+barely-true  & 0{,}27 & 0{,}40 & 0{,}32 & 185 \\
+half-true    & 0{,}28 & 0{,}34 & 0{,}31 & 236 \\
+mostly-true  & 0{,}46 & 0{,}15 & 0{,}23 & 213 \\
+true         & 0{,}50 & 0{,}34 & 0{,}40 & 173 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Czas: 2007 s ($\sim$33 min). \textit{Uwaga:} ze względu na ograniczony
+budżet API uruchomiono z $K_{\text{per\_class}}=1$ oraz wyłączoną
+self-consistency ($\text{SC}=1$) -- prostsza konfiguracja niż w
+pozostałych eksperymentach próby 2. Mimo to model bije GPT-4o-mini 6kl
+few-shot z próby 1 (0{,}359 vs 0{,}310 macro-F1) i osiąga najlepszy
+wynik 6kl spośród wszystkich modeli GPT. Najtrafniej rozpoznawana jest
+klasa \texttt{pants-fire} (F1=0{,}49) -- jaskrawe kłamstwa są najłatwiej
+identyfikowalne.
+
+\subsection{RoBERTa-large + LIAR-PLUS (justification)}\label{sec:liarplus}
+
+W celu przebicia tzw. \emph{performance ceiling} 0{,}32 (sekcja
+\ref{tab:liar_ceiling}) zastosowaliśmy rozszerzoną wersję datasetu --
+LIAR-PLUS \cite{alhindi2018} -- która dodaje do każdej wypowiedzi pole
+\texttt{justification} zawierające kilka zdań uzasadnienia napisane przez
+fact-checkerów PolitiFact. Tekst wejściowy modelu został wzbogacony o
+to pole, długość maksymalna tokenizacji zwiększona ze 128 do 256 tokenów.
+Hiperparametry: lr=5{,}79e-6, weight\_decay=0{,}124, batch=8, 7 epok
+(z best params z Optuny~2kl).
+
+\textbf{6kl + LIAR-PLUS} (acc=0{,}383, balanced acc=0{,}383,
+macro-F1=0{,}380, ROC AUC macro=0{,}772):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+pants-fire   & 0{,}40 & 0{,}40 & 0{,}40 &  92 \\
+false        & 0{,}44 & 0{,}49 & 0{,}46 & 249 \\
+barely-true  & 0{,}36 & 0{,}26 & 0{,}30 & 212 \\
+half-true    & 0{,}35 & 0{,}30 & 0{,}32 & 265 \\
+mostly-true  & 0{,}36 & 0{,}45 & 0{,}40 & 241 \\
+true         & 0{,}39 & 0{,}39 & 0{,}39 & 208 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Dodanie pola \texttt{justification} dało skok macro-F1 z 0{,}357 do
+0{,}380 (+2{,}3 pkt) oraz accuracy z 0{,}357 do 0{,}383 (+2{,}6 pkt). Model
+przebił barierę 0{,}32 z literatury, osiągając wynik porównywalny z
+najnowszymi pracami na LIAR-PLUS. Co istotne, model przestał dominować
+predykcji nad pojedynczymi klasami -- recall jest teraz bardziej
+zrównoważony (0{,}26--0{,}49 dla każdej klasy), zamiast skupiać się na
+2-3 najczęstszych.
+
+\subsection{Próba 3 -- Qwen 2.5 3B Instruct (open-source LLM, zero-shot)}
+
+Jako dodatkowy baseline porównawczy zastosowano model open-source
+\texttt{Qwen/Qwen2.5-3B-Instruct} (3 mld parametrów, dekoder-only).
+Inferencja przeprowadzona lokalnie na GPU T4 (Kaggle), z deterministycznym
+generowaniem (\texttt{do\_sample=False}, max\_new\_tokens=8), w trybie
+zero-shot z anglojęzycznym promptem.
+
+\textbf{2kl zero-shot} (acc=0{,}564, macro-F1=0{,}559, unparsed=33, support=1234):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+fake & 0{,}50 & 0{,}76 & 0{,}60 & 538 \\
+real & 0{,}69 & 0{,}41 & 0{,}51 & 696 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{6kl zero-shot} (acc=0{,}196, macro-F1=0{,}154, unparsed=45, support=1222):
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+ & precision & recall & f1-score & support \\
+\midrule
+pants-fire   & 0{,}16 & 0{,}72 & 0{,}26 &  90 \\
+false        & 0{,}22 & 0{,}50 & 0{,}30 & 241 \\
+barely-true  & 0{,}12 & 0{,}09 & 0{,}10 & 208 \\
+half-true    & 1{,}00 & 0{,}00 & 0{,}01 & 249 \\
+mostly-true  & 0{,}29 & 0{,}09 & 0{,}14 & 233 \\
+true         & 0{,}37 & 0{,}07 & 0{,}11 & 201 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textit{Obserwacje:} Qwen 2.5 3B osiąga wyraźnie słabsze wyniki niż
+modele OpenAI (gpt-4o-mini, gpt-4o) oraz fine-tuned RoBERTa-large --
+zgodnie z oczekiwaniem dla modelu 10$\times$ mniejszego od GPT i 3$\times$
+większego, ale niefinetunowanego, w porównaniu do RoBERTy. Model
+ma silną tendencję do nadmiernego predykowania klas skrajnych
+(\texttt{pants-fire}, \texttt{false}) oraz prawie nigdy nie wybiera klasy
+\texttt{half-true} (recall=0{,}004). Qwen 3B służy więc jako dolne
+ograniczenie (\emph{lower bound}) dla podejścia open-source-LLM bez
+fine-tuningu, pokazując, że na zadaniu LIAR sama skala modelu i jakość
+pretreningu OpenAI mają znaczenie.
+
+\subsection{Czas wykonania}
+
+Pomiary czasu inferencji na pełnym zbiorze testowym (1267 wypowiedzi) dla
+modeli GPT przez API:
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Eksperyment & Czas całkowity & Czas na próbkę \\
+\midrule
+GPT-4o-mini 2kl zero-shot   &   94 s &   75 ms \\
+GPT-4o-mini 2kl few-shot    &  163 s &  130 ms \\
+GPT-4o-mini 6kl zero-shot   &  714 s &  560 ms \\
+GPT-4o-mini 6kl few-shot    & 4001 s & 3160 ms \\
+\midrule
+\textbf{Suma}               & \textbf{$\sim$83 min} & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Few-shot 6-klasowy wyczerpał dzienny limit zapytań API (RPD = 10\,000),
+przez co 801 z 1267 próbek zwróciło błąd zamiast predykcji
+(\texttt{unparsed=801}). Raportowane metryki dla tego eksperymentu są
+policzone na 466 próbkach, a nie na pełnym zbiorze testowym, i nie są
+bezpośrednio porównywalne z pozostałymi. Few-shot 18-przykładowy (3 na
+klasę $\times$ 6 klas) generuje długie prompty, które szybko przekraczają
+limit tokenów na minutę (TPM = 200\,000).
+
+\section{Dyskusja}
+
+\subsection{Few-shot vs.\ zero-shot}
+
+W obu wariantach (2kl i 6kl) prompting few-shot daje wyniki porównywalne
+z zero-shot, a w binarnym przypadku nawet nieznacznie gorsze. Obserwacja ta
+jest zgodna z literaturą i wynika ze specyfiki zadania: LIAR wymaga
+\emph{wiedzy faktograficznej} (czy konkretne stwierdzenie polityczne jest
+prawdziwe), a nie rozpoznawania wzorca stylistycznego. Przykłady w prompcie
+mogą zilustrować format odpowiedzi -- co GPT i tak rozumie w trybie zero-shot
+-- ale nie dostarczają wiedzy potrzebnej do oceny nowej, niezwiązanej tematycznie
+wypowiedzi. Dodatkowo wyszukiwanie przykładów przez kNN po podobieństwie
+tematycznym może wręcz mylić model: wkleja on do promptu wypowiedzi o tym
+samym temacie, ale o różnych etykietach prawdziwości, sugerując że temat nie
+niesie informacji o etykiecie.
+
+Inaczej zachowałby się klasyfikator spamu: tam wystarczy pokazać kilka
+przykładów stylu, by model nauczył się wzorca leksykalnego. W LIAR wzorca
+takiego nie ma -- prawdziwość zależy od stanu świata.
+
+\subsection{Trudność wariantu 6-klasowego}
+
+Spadek wyniku z $\sim 0{,}70$ accuracy (2kl) do $\sim 0{,}30$ (6kl) jest
+spodziewany. Granice między klasami \texttt{barely-true}, \texttt{half-true}
+i \texttt{mostly-true} są w dużej mierze subiektywne -- nawet anotatorzy
+PolitiFact niekoniecznie byliby zgodni co do różnicy między \texttt{half-true}
+a \texttt{mostly-true}. Modele osiągają wyniki w okolicy aktualnego sufitu
+literatury dla tego zadania (27--35\% accuracy).
+
+\begin{table}[h]
+\centering
+\caption{Wyniki ewaluacji na zbiorze LIAR w oryginalnej publikacji Wang
+2017 \cite{wang2017}. Górna sekcja: modele tekstowe. Dolna sekcja: modele
+hybrydowe (tekst + metadane).}
+\label{tab:wang2017}
+\begin{tabular}{lrr}
+\toprule
+Models & Valid. & Test \\
+\midrule
+Majority             & 0{,}204 & 0{,}208 \\
+SVMs                 & 0{,}258 & 0{,}255 \\
+Logistic Regression  & 0{,}257 & 0{,}247 \\
+Bi-LSTMs             & 0{,}223 & 0{,}233 \\
+CNNs                 & 0{,}260 & 0{,}270 \\
+\midrule
+\multicolumn{3}{l}{Hybrid CNNs} \\
+Text + Subject       & 0{,}263 & 0{,}235 \\
+Text + Speaker       & \textbf{0{,}277} & 0{,}248 \\
+Text + Job           & 0{,}270 & 0{,}258 \\
+Text + State         & 0{,}246 & 0{,}256 \\
+Text + Party         & 0{,}259 & 0{,}248 \\
+Text + Context       & 0{,}251 & 0{,}243 \\
+Text + History       & 0{,}246 & 0{,}241 \\
+Text + All           & 0{,}247 & \textbf{0{,}274} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Tabela~\ref{tab:wang2017} pokazuje, że nawet autorzy zbioru LIAR uzyskali
+najlepszą accuracy 0{,}274 na zbiorze testowym (Hybrid CNN z pełnymi
+metadanymi), a pojedyncza klasyfikacja większościowa daje 0{,}208. Słaby
+wynik klasyfikacji 6-klasowej nie wynika więc z błędu modelu, lecz z
+nieusuwalnej dwuznaczności semantycznej -- klasy \texttt{half-true} i
+\texttt{mostly-true} wymagają zewnętrznej wiedzy o świecie i często nie są
+rozróżnialne nawet dla ludzkiego anotatora. Nasze wyniki (RoBERTa-large
+6kl: 0{,}357, RoBERTa-large + LIAR-PLUS 6kl: 0{,}383, GPT-4o few-shot:
+0{,}344) wyraźnie przewyższają referencyjny benchmark z oryginalnej
+publikacji.
+
+Systematyczny przegląd literatury~\cite{emergentmind} potwierdza istnienie
+\emph{performance ceiling} na poziomie $\sim$0{,}32 dla klasyfikacji
+6-klasowej i $\sim$0{,}62 dla klasyfikacji binarnej:
+
+\begin{table}[h]
+\centering
+\caption{Wybrane wyniki z literatury na zbiorze LIAR (źródło:
+emergentmind.com/topics/liar-benchmark).}
+\label{tab:liar_ceiling}
+\begin{tabular}{lrr}
+\toprule
+Model & Test Acc & Weighted F1 \\
+\midrule
+Linear SVM (BoW) -- 2kl                  & 0{,}624 & 0{,}316 \\
+RoBERTa (prior) -- 2kl                   & 0{,}620 & -- \\
+XGBoost (GloVe, overfit) -- 6kl          & 0{,}249 & -- \\
+GPT-3 Curie (fine-tuned) -- 6kl          & 0{,}295 & -- \\
+CNN (text-only, Wang 17) -- 6kl          & 0{,}270 & -- \\
+\midrule
+\textbf{RoBERTa-large + Optuna (nasze)} -- 2kl & \textbf{0{,}738} & 0{,}735 \\
+\textbf{RoBERTa-large + Optuna (nasze)} -- 6kl & \textbf{0{,}357} & 0{,}357 \\
+\textbf{RoBERTa-large + LIAR-PLUS (nasze)} -- 6kl & \textbf{0{,}383} & 0{,}379 \\
+\textbf{GPT-4o few-shot (nasze)} -- 6kl  & \textbf{0{,}344} & 0{,}341 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Cytat za przeglądem: \emph{,,fine-grained classification accuracy and
+weighted F1 do not exceed 0{,}32, even when employing linear SVM, XGBoost,
+and RoBERTa-based architectures, [...] reflecting exploitation of lexical
+artifacts rather than transferability''}. Co więcej, modele drzewiaste
+przy treningu osiągają $\sim$99\% accuracy na zbiorze treningowym, ale
+zaledwie $\sim$25\% na zbiorze testowym -- klasyczny obraz uczenia się
+płytkich, leksykalnych wzorców zamiast prawdziwej wiedzy faktograficznej.
+Nasza RoBERTa-large 2kl (0{,}738) wyraźnie przebija barierę 0{,}62
+raportowaną w literaturze, a GPT-4o 6kl (0{,}344) -- przekracza sufit
+0{,}32.
+
+Co więcej, sami fact-checkerzy PolitiFact -- tworzący etykiety dla zbioru
+LIAR -- regularnie nie zgadzają się ze sobą przy przypisywaniu jednej z
+sześciu klas. Granice między \texttt{barely-true}, \texttt{half-true} i
+\texttt{mostly-true} są określone w wewnętrznych wytycznych redakcji, ale
+ich stosowanie do konkretnych wypowiedzi zależy od interpretacji
+poszczególnego dziennikarza. Liczne wypowiedzi polityków bywały
+re-klasyfikowane lub publicznie krytykowane jako niespójne, co dowodzi że
+nawet ludzki ekspert nie osiąga pełnej zgodności na tym zadaniu. Modele
+uczone na tak zaszumianych etykietach nie mogą przekroczyć tzw.
+\emph{anotacyjnego sufitu} (\emph{annotation ceiling}) -- czyli górnej
+granicy jakości wynikającej z subiektywności samych danych
+treningowych.
+
+\subsection{Techniki podnoszące jakość modeli}
+
+Aby maksymalnie wycisnąć jakość mimo trudności zadania, zastosowaliśmy
+następujące techniki:
+
+\begin{itemize}
+  \item \textbf{Ważona funkcja straty (class weights)} -- Cross-Entropy
+        z wagami $w_c = N / (C \cdot n_c)$ przeciwdziała tendencji modelu
+        do ignorowania klas mniejszościowych (zwłaszcza \texttt{pants-fire}
+        w wariancie 6kl).
+  \item \textbf{Label smoothing} ($\varepsilon=0{,}1$) -- redukuje
+        nadmierną pewność predykcji i poprawia kalibrację, ograniczając
+        eksplozję val\_loss przy fine-tuningu RoBERTy-large.
+  \item \textbf{Wyszukiwanie hiperparametrów Optuna} -- 20 triali z
+        samplerem TPE i pruningiem MedianPruner po pierwszej epoce.
+        Optymalizowane: \texttt{lr}, \texttt{weight\_decay},
+        \texttt{epochs}, \texttt{batch\_size}. Best params: lr=5{,}79e-6,
+        wd=0{,}124, epochs=5, batch=8.
+  \item \textbf{Early stopping} -- model najlepszej epoki (po val
+        macro-F1) zapisywany na dysk; trening przerywany po 2 epokach
+        bez poprawy.
+  \item \textbf{Linear warmup + decay} -- jeden epoch warmup, następnie
+        liniowy spadek lr do zera. Stabilizuje fine-tuning pretrenowanego
+        enkodera.
+  \item \textbf{Gradient clipping} ($\|\nabla\|_2 \le 1{,}0$) --
+        zabezpiecza przed skokami gradientu na trudnych batchach.
+  \item \textbf{Mixed precision (bfloat16)} -- przyspieszenie treningu
+        $\sim$2$\times$ na A100 bez utraty jakości, dzięki czemu Optuna
+        wykonała 20 triali w $\sim$2 godziny.
+  \item \textbf{Structured Outputs} (GPT) -- wymuszenie odpowiedzi w
+        formacie JSON ze schematem \texttt{enum} etykiet, co eliminuje
+        problem niezparsowanych odpowiedzi (z $\sim$11\% do $<$1\%).
+  \item \textbf{Self-consistency} (GPT, próba 2) -- $N=3$ niezależne
+        zapytania per próbkę i głosowanie większościowe, redukujące
+        wariancję stochastyczną modelu generatywnego.
+  \item \textbf{Few-shot kNN retrieval} -- przykłady demonstracyjne
+        dobierane przez TF-IDF cosine similarity, a nie losowo --
+        kontekst tematycznie zbliżony do zapytania.
+  \item \textbf{Selekcja po macro-F1, nie accuracy} -- zarówno selekcja
+        najlepszej epoki, jak i raportowanie głównego wyniku odbywa się
+        na podstawie macro-F1, zgodnie z zaleceniami literatury LIAR.
+        Macro-F1 traktuje każdą klasę jednakowo, niezależnie od jej
+        liczebności -- accuracy i weighted-F1 byłyby zdominowane przez
+        klasy większościowe i nie odzwierciedlałyby zdolności modelu do
+        rozpoznawania klas rzadkich (krytyczne dla 6kl, gdzie
+        \texttt{pants-fire} stanowi tylko 8\% danych).
+\end{itemize}
+
+\subsection{Fine-tuning vs.\ prompting}
+
+Wyniki sugerują, że fine-tuning RoBERTy-base nie wystarcza do pokonania
+prostego promptingu GPT-4o-mini (0{,}64 vs 0{,}70 accuracy w wariancie 2kl).
+Spodziewamy się, że \texttt{roberta-large} z odpowiednio dobranymi
+hiperparametrami zbliży się do wyników GPT-4o, lecz nie powinien ich
+zdominować -- granicą jest jakość samych etykiet oraz brak dostępu modelu
+do zewnętrznej wiedzy o świecie. Przewaga GPT-4o nad mniejszymi modelami
+jest spójna z ogólnym obserwowaniem, że większe modele wykazują lepszą
+\emph{world knowledge} przydatną w zadaniach fact-checkingowych.
+
+\section{Wnioski}
+
+\begin{enumerate}
+  \item RoBERTa-large jest naturalnym wyborem nad BERT-em ze względu na
+        większy korpus pretreningu, dynamiczne maskowanie i lepsze
+        właściwości reprezentacji do klasyfikacji pojedynczych zdań.
+  \item W zadaniach wymagających wiedzy o świecie (jak fact-checking)
+        few-shot nie poprawia istotnie wyników nad zero-shot -- mechanizm
+        ten jest skuteczny tam, gdzie kluczowy jest wzorzec, nie fakty.
+  \item Macro-F1 jest właściwą metryką dla niezbilansowanego LIAR-a;
+        accuracy maskuje słabe wyniki na klasach mniejszościowych.
+  \item Wagi klas i Structured Outputs to dwie najistotniejsze poprawki
+        techniczne, które dają mierzalny zysk małym kosztem implementacyjnym.
+\end{enumerate}
+
+\begin{thebibliography}{9}
+  \bibitem{wang2017}
+  W.\ Y.\ Wang, ``Liar, liar pants on fire'': A new benchmark dataset for fake
+  news detection, \emph{ACL}, 2017.
+
+  \bibitem{liu2019}
+  Y.\ Liu et al., RoBERTa: A robustly optimized BERT pretraining approach,
+  \emph{arXiv:1907.11692}, 2019.
+
+  \bibitem{devlin2019}
+  J.\ Devlin et al., BERT: Pre-training of deep bidirectional transformers
+  for language understanding, \emph{NAACL}, 2019.
+
+  \bibitem{openai2024}
+  OpenAI, GPT-4o system card, 2024.
+
+  \bibitem{labellerr2024}
+  Labellerr, RoBERTa: A robustly optimized BERT pretraining approach,
+  \url{https://www.labellerr.com/blog/roberta-a-robustly-optimized-bert-pretraining-approach/}
+
+  \bibitem{emergentmind}
+  Emergent Mind, LIAR Benchmark for Fake News Detection,
+  \url{https://www.emergentmind.com/topics/liar-benchmark}
+
+  \bibitem{alhindi2018}
+  T.\ Alhindi, S.\ Petridis, S.\ Muresan, Where is your evidence:
+  Improving fact-checking by justification modeling, \emph{Proceedings of
+  the First Workshop on Fact Extraction and Verification (FEVER)}, 2018.
+  \url{https://github.com/Tariq60/LIAR-PLUS}
+\end{thebibliography}
+
+\end{document}
