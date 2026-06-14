@@ -54,6 +54,37 @@
   \end{itemize}
 \end{frame}
 
+\begin{frame}{Struktura zbioru LIAR}
+  \small
+  Każda wypowiedź ma 14 kolumn:
+  \begin{center}
+  \begin{tabular}{ll}
+    \toprule
+    Kolumna & Znaczenie \\
+    \midrule
+    \texttt{id}                 & unikalny identyfikator wypowiedzi \\
+    \texttt{label}              & etykieta (\texttt{pants-fire} ... \texttt{true}) \\
+    \texttt{statement}          & treść wypowiedzi (główny tekst) \\
+    \texttt{subject}            & temat (np. economy, education) \\
+    \texttt{speaker}            & mówca (np. Donald Trump) \\
+    \texttt{job\_title}         & stanowisko mówcy \\
+    \texttt{state}              & stan USA \\
+    \texttt{party}              & partia polityczna \\
+    \texttt{barely\_true\_counts} & liczba poprzednich \texttt{barely-true} \\
+    \texttt{false\_counts}      & liczba poprzednich \texttt{false} \\
+    \texttt{half\_true\_counts} & liczba poprzednich \texttt{half-true} \\
+    \texttt{mostly\_true\_counts} & liczba poprzednich \texttt{mostly-true} \\
+    \texttt{pants\_on\_fire\_counts} & liczba poprzednich \texttt{pants-fire} \\
+    \texttt{context}            & kontekst (np. campaign rally, interview) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  Kolumny \texttt{*\_counts} to \emph{credit history} -- wiarygodność mówcy
+  na podstawie historii.
+\end{frame}
+
 \begin{frame}{Preprocessing}
   Każda wypowiedź łączona w jeden tekst:
   \begin{quote}\small
