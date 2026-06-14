@@ -88,20 +88,64 @@
 
 \section{Metody}
 
-\begin{frame}{RoBERTa-large -- fine-tuning}
-  Dlaczego \texttt{roberta-large} (355M parametrów):
+\begin{frame}{RoBERTa -- czym jest i dlaczego ją wybraliśmy}
+  \small
+  \textbf{RoBERTa} (Robustly Optimized BERT, Liu et al.\ 2019) -- model
+  językowy typu \emph{encoder-only}, oparty na architekturze Transformer.
+  Czyta tekst dwukierunkowo i produkuje gęsty wektor reprezentacji,
+  idealny do klasyfikacji (nie generuje tekstu).
+
+  \vspace{0.3em}
+  \textbf{RoBERTa vs BERT:}
+  \begin{center}
+  \begin{tabular}{lll}
+    \toprule
+     & \textbf{BERT (Devlin 2019)} & \textbf{RoBERTa (Liu 2019)} \\
+    \midrule
+    Korpus pretreningu & 16 GB (Wiki+Books) & \textbf{160 GB} (+CC-News, OpenWebText) \\
+    Maskowanie         & statyczne          & \textbf{dynamiczne} \\
+    Zadanie pretrenu   & MLM + NSP          & \textbf{tylko MLM} (NSP nie pomaga) \\
+    Batch size         & 256                & \textbf{8K} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.3em}
+  \textbf{Wybór \texttt{roberta-large} (355M parametrów):}
   \begin{itemize}
-    \item \textbf{160 GB} korpus pretreningu vs 16 GB BERT
-    \item Dynamiczne maskowanie, brak NSP
-    \item Encoder-only -- produkuje wektor reprezentacji, idealne do klasyfikacji
+    \item Bogatsza wiedza ogólna -- 10$\times$ większy korpus istotny w domenie newsów
+    \item Lepsze reprezentacje pojedynczych zdań (brak NSP) -- pasuje do klasyfikacji
+    \item Test 2kl: \textbf{0{,}738} vs BERT-base $\sim$0{,}65 (literatura)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Wybór metryki: macro-F1}
+  \small
+  Klasyfikacja LIAR jest \textbf{niezbalansowana} -- klasy mają różne
+  liczebności (\texttt{pants-fire} 8\% vs \texttt{half-true} 21\%).
+
+  \vspace{0.3em}
+  \textbf{Co stosujemy:}
+  \begin{itemize}
+    \item \textbf{macro-F1} -- średnia arytmetyczna F1 dla każdej klasy,
+          \emph{bez ważenia liczebnością}.
+    \item Każda klasa liczy się tak samo, niezależnie od support.
   \end{itemize}
 
-  \vspace{0.5em}
-  Tekst wejściowy łączy wiele cech:
-  \begin{quote}\small
-    \texttt{\{speaker\} (\{party\}, past lies: N, past truths: M): \{statement\}
-    Subject: \{subject\} Context: \{context\}}
-  \end{quote}
+  \vspace{0.3em}
+  \textbf{Czemu nie accuracy / weighted-F1:}
+  \begin{itemize}
+    \item Model przewidujący zawsze \texttt{half-true} dostałby
+          accuracy 21\% za darmo, choć kompletnie nie umie klasyfikować
+    \item Weighted-F1 jest dominowane przez klasy większościowe --
+          maskuje słabe wyniki na rzadkich klasach (\texttt{pants-fire})
+    \item Macro-F1 \textbf{karze} model za ignorowanie klas mniejszościowych
+          -- co jest krytyczne w fact-checkingu (najgorsze kłamstwa
+          \texttt{pants-fire} są też najrzadsze)
+  \end{itemize}
+
+  \textbf{Wniosek:} macro-F1 mierzy rzeczywistą zdolność modelu do
+  rozpoznawania wszystkich klas, nie tylko tych łatwych.
 \end{frame}
 
 \begin{frame}{Techniki podnoszące jakość}
@@ -121,23 +165,43 @@
   \textbf{Selekcja po macro-F1, nie accuracy} -- niezbalansowane klasy.
 \end{frame}
 
-\begin{frame}{Najlepsze hiperparametry (Optuna 2kl)}
-  20 triali TPE + MedianPruner, $\sim$2h na A100:
+\begin{frame}{Optuna -- automatyczne strojenie hiperparametrów}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \small
+      \textbf{Co to:} framework do automatycznego wyszukiwania
+      hiperparametrów.
 
-  \begin{center}
-  \begin{tabular}{lr}
-    \toprule
-    parametr & wartość \\
-    \midrule
-    learning rate & $5{,}79 \cdot 10^{-6}$ \\
-    weight decay  & $0{,}124$ \\
-    epochs        & 5 \\
-    batch size    & 8 \\
-    \midrule
-    \textbf{val macro-F1} & \textbf{0{,}7435} \\
-    \bottomrule
-  \end{tabular}
-  \end{center}
+      \begin{itemize}
+        \item \textbf{TPE Sampler} -- Bayesowski wybór kolejnych prób,
+              uczy się z wcześniejszych
+        \item \textbf{MedianPruner} -- ucina słabe triale po E1
+              (poniżej mediany), oszczędza GPU
+      \end{itemize}
+
+      \textbf{Po co:} 50 kombinacji ręcznie = dni GPU; Optuna 20 prób = 2h.
+
+      \textbf{Efekt:} val F1 $0{,}71 \to \textbf{0{,}7435}$ (+3 pkt).
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \small
+      \centering
+      \textbf{Best params (2kl):}
+      \vspace{0.3em}
+      \begin{tabular}{lr}
+        \toprule
+        parametr & wartość \\
+        \midrule
+        learning rate & $5{,}79 \cdot 10^{-6}$ \\
+        weight decay  & $0{,}124$ \\
+        epochs        & 5 \\
+        batch size    & 8 \\
+        \midrule
+        \textbf{val F1} & \textbf{0{,}7435} \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
 \end{frame}
 
 \section{Wyniki}
@@ -183,29 +247,6 @@
   Wyraźnie powyżej sufitu literatury (0{,}32) dzięki LIAR-PLUS.
 \end{frame}
 
-\begin{frame}{LIAR vs LIAR-PLUS -- różnice}
-  \begin{center}
-  \begin{tabular}{lll}
-    \toprule
-     & \textbf{LIAR} & \textbf{LIAR-PLUS} \\
-    \midrule
-    Autor / rok           & Wang 2017 & Alhindi 2018 \\
-    Liczba kolumn         & 14        & \textbf{15} \\
-    Statement, metadane   & \checkmark & \checkmark \\
-    History counts        & \checkmark & \checkmark \\
-    \textbf{Justification} & ---       & \textbf{\checkmark} \\
-    Median tokens         & 22        & \textbf{100} \\
-    SOTA 6kl acc          & $\sim$0{,}32 & $\sim$0{,}38 \\
-    \bottomrule
-  \end{tabular}
-  \end{center}
-
-  \vspace{0.5em}
-  \texttt{justification} = kilka zdań uzasadnienia napisanych przez
-  fact-checkerów PolitiFact pochodzących z artykułów weryfikujących
-  daną wypowiedź.
-\end{frame}
-
 \begin{frame}{LIAR-PLUS -- dodanie justification}
   Rozszerzona wersja LIAR (Alhindi 2018):
   \begin{itemize}
@@ -224,27 +265,50 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Qwen 2.5 3B -- baseline open-source}
-  Inferencja na T4 (Kaggle), zero-shot, anglojęzyczny prompt:
+\begin{frame}{LLM prompting -- GPT vs Qwen open-source}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \small
+      \textbf{GPT (OpenAI API)}
+      \begin{itemize}
+        \item \texttt{gpt-4o-mini} i \texttt{gpt-4o}
+        \item \textbf{Structured Outputs}: JSON schema, enum etykiet
+              $\to$ 0\% unparsed
+        \item \textbf{Few-shot kNN}: K=3 demo na klasę przez TF-IDF cosine
+        \item \textbf{Self-consistency}: N=3 niezależne predykcje
+              + voting większościowy
+        \item Płatne (\$$\sim$2.50 per pełny test 6kl FS)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \small
+      \textbf{Qwen 2.5 3B (open-source)}
+      \begin{itemize}
+        \item Lokalnie na T4 Kaggle (free)
+        \item Zero-shot, anglojęzyczny prompt
+        \item Deterministyczne dekodowanie (\texttt{do\_sample=False})
+        \item Brak Structured Outputs (parser regex)
+        \item Inferencja na 1267 próbkach $\sim$5--10 min
+      \end{itemize}
+    \end{column}
+  \end{columns}
 
+  \vspace{0.5em}
+  \small
   \begin{center}
-  \begin{tabular}{lrr}
+  \begin{tabular}{lrrrr}
     \toprule
-    Wariant & accuracy & macro-F1 \\
+    Model & 2kl acc & 2kl F1 & 6kl acc & 6kl F1 \\
     \midrule
-    Qwen 2.5 3B -- 2kl ZS & 0{,}564 & 0{,}559 \\
-    Qwen 2.5 3B -- 6kl ZS & 0{,}196 & 0{,}154 \\
+    GPT-4o-mini ZS    & 0{,}696 & 0{,}695 & 0{,}298 & 0{,}279 \\
+    GPT-4o ZS (SC=3)  & \textbf{0{,}729} & \textbf{0{,}729} & --- & --- \\
+    GPT-4o 6kl FS     & --- & --- & \textbf{0{,}344} & \textbf{0{,}356} \\
+    Qwen 2.5 3B ZS    & 0{,}564 & 0{,}559 & 0{,}196 & 0{,}154 \\
     \bottomrule
   \end{tabular}
   \end{center}
 
-  \vspace{0.5em}
-  \textbf{Wnioski:}
-  \begin{itemize}
-    \item 3B model bez fine-tuningu jest zdecydowanie słabszy od GPT-4o
-    \item Dolne ograniczenie (\emph{lower bound}) dla podejścia LLM-prompting open-source
-    \item Pokazuje że \textbf{skala modelu i jakość pretreningu OpenAI mają znaczenie}
-  \end{itemize}
+  Qwen 3B = \emph{lower bound} dla LLM bez fine-tuningu.
 \end{frame}
 
 \begin{frame}{Trudność wariantu 6-klasowego}
@@ -257,6 +321,35 @@
     \item \textbf{Niezbalansowane klasy} -- \texttt{pants-fire} tylko 8\%
     \item \textbf{Anotacyjny sufit} -- ludzki ekspert też nie osiąga 100\% zgodności
   \end{enumerate}
+\end{frame}
+
+\begin{frame}{Czas wykonania}
+  \small
+  \begin{center}
+  \begin{tabular}{lrr}
+    \toprule
+    Eksperyment & Czas & Per próbka \\
+    \midrule
+    \multicolumn{3}{l}{\textbf{GPT-4o-mini (API)} -- 1267 próbek} \\
+    2kl zero-shot           & 94 s     & 75 ms \\
+    2kl few-shot            & 163 s    & 130 ms \\
+    6kl zero-shot           & 714 s ($\sim$12 min) & 560 ms \\
+    6kl few-shot            & 4001 s ($\sim$67 min) & 3{,}2 s \\
+    \midrule
+    \multicolumn{3}{l}{\textbf{GPT-4o (API, próba 2)}} \\
+    2kl zero-shot SC=3      & 160 s    & 125 ms \\
+    6kl few-shot K=1 SC=1   & 2007 s ($\sim$33 min) & 1{,}6 s \\
+    \midrule
+    \multicolumn{3}{l}{\textbf{Qwen 2.5 3B (lokalnie, T4)}} \\
+    2kl + 6kl zero-shot     & $\sim$15 min & --- \\
+    \midrule
+    \multicolumn{3}{l}{\textbf{RoBERTa-large (A100, trening + ewaluacja)}} \\
+    2kl trening 5 epok      & $\sim$10 min & --- \\
+    Optuna 2kl (20 triali)  & $\sim$2 h    & --- \\
+    6kl\_plus 7 epok        & $\sim$25 min & --- \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
 \end{frame}
 
 \section{Wnioski}
