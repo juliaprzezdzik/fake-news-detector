@@ -54,6 +54,26 @@
   \end{itemize}
 \end{frame}
 
+\begin{frame}{Preprocessing}
+  Każda wypowiedź łączona w jeden tekst:
+  \begin{quote}\small
+    \texttt{\{speaker\} (\{party\}, past lies: N, past truths: M):\\
+    \{statement\} Subject: \{subject\} Context: \{context\}}
+  \end{quote}
+
+  \begin{itemize}
+    \item Mapowanie etykiet 6kl $\to$ 2kl:
+          \texttt{pants-fire/false/barely-true} $\to$ \texttt{fake},\\
+          \texttt{half-true/mostly-true/true} $\to$ \texttt{real}
+    \item Tokenizacja \texttt{AutoTokenizer} (RoBERTa BPE), max\_length=128
+    \item 99{,}96\% wypowiedzi mieści się w 128 tokenach (mediana = 22)
+    \item Wagi klas: $w_c = N/(C \cdot n_c)$
+          przeciwdziałają niezbalansowaniu
+    \item Tensory \texttt{input\_ids}, \texttt{attention\_mask}, \texttt{labels}
+          opakowane w \texttt{DataLoader}
+  \end{itemize}
+\end{frame}
+
 \begin{frame}{Performance Ceiling}
   Systematyczny przegląd literatury (emergentmind.com) potwierdza:
   \begin{itemize}
@@ -161,6 +181,29 @@
 
   \vspace{0.5em}
   Wyraźnie powyżej sufitu literatury (0{,}32) dzięki LIAR-PLUS.
+\end{frame}
+
+\begin{frame}{LIAR vs LIAR-PLUS -- różnice}
+  \begin{center}
+  \begin{tabular}{lll}
+    \toprule
+     & \textbf{LIAR} & \textbf{LIAR-PLUS} \\
+    \midrule
+    Autor / rok           & Wang 2017 & Alhindi 2018 \\
+    Liczba kolumn         & 14        & \textbf{15} \\
+    Statement, metadane   & \checkmark & \checkmark \\
+    History counts        & \checkmark & \checkmark \\
+    \textbf{Justification} & ---       & \textbf{\checkmark} \\
+    Median tokens         & 22        & \textbf{100} \\
+    SOTA 6kl acc          & $\sim$0{,}32 & $\sim$0{,}38 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.5em}
+  \texttt{justification} = kilka zdań uzasadnienia napisanych przez
+  fact-checkerów PolitiFact pochodzących z artykułów weryfikujących
+  daną wypowiedź.
 \end{frame}
 
 \begin{frame}{LIAR-PLUS -- dodanie justification}
