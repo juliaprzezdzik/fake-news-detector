@@ -1,0 +1,236 @@
+\documentclass[10pt]{beamer}
+\usetheme{Madrid}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[polish]{babel}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Wykrywanie fake news}
+\subtitle{Porównanie modeli językowych na zbiorze LIAR}
+\date{Czerwiec 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Problem i dane}
+
+\begin{frame}{Cel projektu}
+  Klasyfikacja prawdziwości wypowiedzi politycznych na \textbf{zbiorze LIAR}.
+
+  \vspace{0.5em}
+  Dwa warianty zadania:
+  \begin{itemize}
+    \item \textbf{Binarna (2kl)}: \texttt{fake} / \texttt{real}
+    \item \textbf{Sześcioklasowa (6kl)}: \texttt{pants-fire}, \texttt{false},
+          \texttt{barely-true}, \texttt{half-true}, \texttt{mostly-true}, \texttt{true}
+  \end{itemize}
+
+  \vspace{0.5em}
+  Porównujemy trzy paradygmaty:
+  \begin{enumerate}
+    \item \textbf{Fine-tuning encodera} -- RoBERTa-large
+    \item \textbf{Prompting LLM (płatny)} -- GPT-4o-mini, GPT-4o
+    \item \textbf{Prompting LLM (open-source)} -- Qwen 2.5 3B
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Zbiór LIAR}
+  \begin{itemize}
+    \item 12 791 krótkich wypowiedzi z PolitiFact (Wang 2017)
+    \item Splity: train 10 240, val 1 284, test 1 267
+    \item Każda wypowiedź ma: treść, mówcę, partię, historię prawdziwości
+    \item Tematy: gospodarka, opieka zdrowotna, podatki, edukacja, wybory, imigracja
+  \end{itemize}
+
+  \vspace{0.5em}
+  \textbf{Trudność:}
+  \begin{itemize}
+    \item Niezbalansowane klasy (najrzadsza \texttt{pants-fire} = 8\%)
+    \item Granice między klasami subiektywne -- nawet fact-checkerzy się nie zgadzają
+    \item Wymaga wiedzy o świecie, nie tylko analizy stylu
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Performance Ceiling}
+  Systematyczny przegląd literatury (emergentmind.com) potwierdza:
+  \begin{itemize}
+    \item \textbf{6kl}: accuracy nie przekracza $\sim$0{,}32
+    \item \textbf{2kl}: $\sim$0{,}62 (SVM/RoBERTa baseline)
+    \item Modele drzewiaste: 99\% train, ale 25\% test = czysty overfit
+  \end{itemize}
+
+  \vspace{0.5em}
+  Nawet Wang 2017 (oryginalny paper LIAR) osiągnął tylko \textbf{0{,}274 acc} dla 6kl.
+\end{frame}
+
+\section{Metody}
+
+\begin{frame}{RoBERTa-large -- fine-tuning}
+  Dlaczego \texttt{roberta-large} (355M parametrów):
+  \begin{itemize}
+    \item \textbf{160 GB} korpus pretreningu vs 16 GB BERT
+    \item Dynamiczne maskowanie, brak NSP
+    \item Encoder-only -- produkuje wektor reprezentacji, idealne do klasyfikacji
+  \end{itemize}
+
+  \vspace{0.5em}
+  Tekst wejściowy łączy wiele cech:
+  \begin{quote}\small
+    \texttt{\{speaker\} (\{party\}, past lies: N, past truths: M): \{statement\}
+    Subject: \{subject\} Context: \{context\}}
+  \end{quote}
+\end{frame}
+
+\begin{frame}{Techniki podnoszące jakość}
+  \begin{itemize}
+    \item \textbf{Wagi klas} (Cross-Entropy z $w_c = N/(C \cdot n_c)$)
+    \item \textbf{Label smoothing} ($\varepsilon = 0{,}1$)
+    \item \textbf{Optuna} -- 20 triali, TPE sampler, MedianPruner
+    \item \textbf{Early stopping} po val macro-F1
+    \item \textbf{Mixed precision bfloat16} -- 2$\times$ szybciej na A100
+    \item \textbf{Linear warmup + decay} schedulera lr
+    \item \textbf{Structured Outputs} (GPT) -- JSON schema, 0 unparsed
+    \item \textbf{Self-consistency} (GPT) -- N=3 niezależne predykcje + voting
+    \item \textbf{Few-shot kNN retrieval} -- TF-IDF cosine similarity
+  \end{itemize}
+
+  \vspace{0.5em}
+  \textbf{Selekcja po macro-F1, nie accuracy} -- niezbalansowane klasy.
+\end{frame}
+
+\begin{frame}{Najlepsze hiperparametry (Optuna 2kl)}
+  20 triali TPE + MedianPruner, $\sim$2h na A100:
+
+  \begin{center}
+  \begin{tabular}{lr}
+    \toprule
+    parametr & wartość \\
+    \midrule
+    learning rate & $5{,}79 \cdot 10^{-6}$ \\
+    weight decay  & $0{,}124$ \\
+    epochs        & 5 \\
+    batch size    & 8 \\
+    \midrule
+    \textbf{val macro-F1} & \textbf{0{,}7435} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\section{Wyniki}
+
+\begin{frame}{Wyniki -- klasyfikacja binarna (2kl)}
+  \begin{center}
+  \begin{tabular}{lrr}
+    \toprule
+    Model & accuracy & macro-F1 \\
+    \midrule
+    GPT-4o-mini zero-shot     & 0{,}696 & 0{,}695 \\
+    GPT-4o-mini few-shot      & 0{,}693 & 0{,}686 \\
+    GPT-4o zero-shot (SC=3)   & 0{,}729 & 0{,}729 \\
+    \textbf{RoBERTa-large + Optuna} & \textbf{0{,}738} & \textbf{0{,}728} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.5em}
+  RoBERTa fine-tuned bije GPT-4o pricingiem 0$\$$ inferencji.
+  \\ Bije \textbf{baseline z literatury} (RoBERTa $\sim$0{,}62) o \textbf{+12 pkt}.
+\end{frame}
+
+\begin{frame}{Wyniki -- klasyfikacja 6-klasowa}
+  \begin{center}
+  \begin{tabular}{lrr}
+    \toprule
+    Model & accuracy & macro-F1 \\
+    \midrule
+    GPT-4o-mini zero-shot       & 0{,}298 & 0{,}279 \\
+    GPT-4o-mini few-shot        & 0{,}324 & 0{,}310 \\
+    GPT-4o few-shot (K=1, SC=1) & 0{,}344 & 0{,}356 \\
+    RoBERTa-large + Optuna      & 0{,}357 & 0{,}359 \\
+    \textbf{RoBERTa-large + LIAR-PLUS} & \textbf{0{,}383} & \textbf{0{,}380} \\
+    \midrule
+    Wang 2017 (Hybrid CNN + meta) & 0{,}274 & -- \\
+    \emph{Performance ceiling lit.} & $\sim$0{,}32 & -- \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.5em}
+  Wyraźnie powyżej sufitu literatury (0{,}32) dzięki LIAR-PLUS.
+\end{frame}
+
+\begin{frame}{LIAR-PLUS -- dodanie justification}
+  Rozszerzona wersja LIAR (Alhindi 2018):
+  \begin{itemize}
+    \item Dodaje pole \texttt{justification} -- uzasadnienie fact-checkera
+    \item 99\% próbek ma niepuste pole
+    \item Median długości tekstu: 22 $\to$ 100 tokenów
+    \item Max\_length tokenizacji: 128 $\to$ 256
+  \end{itemize}
+
+  \vspace{0.5em}
+  \textbf{Efekt na 6kl:}
+  \begin{itemize}
+    \item Accuracy: $0{,}357 \to 0{,}383$ (+2{,}6 pkt)
+    \item Macro-F1: $0{,}359 \to 0{,}380$ (+2{,}1 pkt)
+    \item ROC AUC: $0{,}77$ -- model dobrze rankuje, nawet jeśli granice klas są rozmyte
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Qwen 2.5 3B -- baseline open-source}
+  Inferencja na T4 (Kaggle), zero-shot, anglojęzyczny prompt:
+
+  \begin{center}
+  \begin{tabular}{lrr}
+    \toprule
+    Wariant & accuracy & macro-F1 \\
+    \midrule
+    Qwen 2.5 3B -- 2kl ZS & 0{,}564 & 0{,}559 \\
+    Qwen 2.5 3B -- 6kl ZS & 0{,}196 & 0{,}154 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{0.5em}
+  \textbf{Wnioski:}
+  \begin{itemize}
+    \item 3B model bez fine-tuningu jest zdecydowanie słabszy od GPT-4o
+    \item Dolne ograniczenie (\emph{lower bound}) dla podejścia LLM-prompting open-source
+    \item Pokazuje że \textbf{skala modelu i jakość pretreningu OpenAI mają znaczenie}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Trudność wariantu 6-klasowego}
+  Dlaczego 6kl jest dramatycznie trudniejsze:
+  \begin{enumerate}
+    \item \textbf{Subiektywność} -- granice \texttt{barely-/half-/mostly-true}
+          nawet dla anotatorów PolitiFact są niejednoznaczne
+    \item \textbf{Wymaga wiedzy o świecie} -- RoBERTa pretrenowana
+          na Wikipedia/książkach, nie aktualnych newsach politycznych
+    \item \textbf{Niezbalansowane klasy} -- \texttt{pants-fire} tylko 8\%
+    \item \textbf{Anotacyjny sufit} -- ludzki ekspert też nie osiąga 100\% zgodności
+  \end{enumerate}
+\end{frame}
+
+\section{Wnioski}
+
+\begin{frame}{Wnioski}
+  \begin{itemize}
+    \item \textbf{Fine-tuning vs prompting:}
+          \begin{itemize}
+            \item 2kl: RoBERTa-large $\geq$ GPT-4o (lokalnie, 0$\$$ inferencji)
+            \item 6kl: GPT-4o $\geq$ RoBERTa (wiedza o świecie)
+            \item RoBERTa-large + LIAR-PLUS -- nasze najlepsze 6kl
+          \end{itemize}
+    \item \textbf{Few-shot nie pomaga} w fact-checkingu (brak transferu wiedzy)
+    \item \textbf{Structured Outputs} -- musi być (z 11\% unparsed do 0\%)
+    \item \textbf{Macro-F1, nie accuracy} -- niezbalansowane klasy
+    \item \textbf{Performance ceiling 6kl} ($\sim$0{,}32) przekroczyliśmy dzięki LIAR-PLUS
+  \end{itemize}
+\end{frame}
+
+\end{document}
