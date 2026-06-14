@@ -6,6 +6,7 @@
 \usepackage[polish]{babel}
 \usepackage{booktabs}
 \usepackage{hyperref}
+\usepackage{graphicx}
 
 \title{Wykrywanie fake news}
 \subtitle{Porównanie modeli językowych na zbiorze LIAR}
@@ -52,6 +53,14 @@
     \item Granice między klasami subiektywne -- nawet fact-checkerzy się nie zgadzają
     \item Wymaga wiedzy o świecie, nie tylko analizy stylu
   \end{itemize}
+\end{frame}
+
+\begin{frame}{Rozkład klas w zbiorze LIAR}
+  \begin{center}
+    \includegraphics[width=0.95\textwidth]{label_distribution.png}
+  \end{center}
+  Klasa \texttt{pants-fire} (8{,}2\%) zdecydowanie najrzadsza;
+  pozostałe stosunkowo zbalansowane (16--21\%).
 \end{frame}
 
 \begin{frame}{Struktura zbioru LIAR}
@@ -125,6 +134,11 @@
   językowy typu \emph{encoder-only}, oparty na architekturze Transformer.
   Czyta tekst dwukierunkowo i produkuje gęsty wektor reprezentacji,
   idealny do klasyfikacji (nie generuje tekstu).
+
+  \emph{Mechanizm attention:} dla każdego słowa model uczy się jakie
+  \emph{wagi} przypisać innym słowom w zdaniu -- w jednym przejściu
+  każdy token może spojrzeć na każdy inny, dzięki czemu model uchwyca
+  długie zależności kontekstowe.
 
   \vspace{0.3em}
   \textbf{RoBERTa vs BERT:}
