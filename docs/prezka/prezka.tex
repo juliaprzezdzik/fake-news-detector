@@ -32,34 +32,43 @@
   \vspace{0.5em}
   Porównujemy dwa paradygmaty:
   \begin{enumerate}
-    \item \textbf{Fine-tuning encodera} -- RoBERTa-large
-    \item \textbf{Prompting LLM} -- GPT-4o-mini, GPT-4o
+    \item \textbf{Fine-tuning encodera} -- BERT-base, RoBERTa-base, RoBERTa-large
+    \item \textbf{Prompting LLM} -- GPT-4o-mini, GPT-4o; darmowe (OpenRouter):
+          gpt-oss-20b, gemma-4-31b-it, dolphin-mistral-24b, llama-3.3-70b-instruct
   \end{enumerate}
 \end{frame}
 
 \begin{frame}{Zbiór LIAR}
+  \small
   \begin{itemize}
-    \item 12 791 krótkich wypowiedzi z PolitiFact (Wang 2017)
-    \item Splity: train 10 240, val 1 284, test 1 267
-    \item Każda wypowiedź ma: treść, mówcę, partię, historię prawdziwości
-    \item Tematy: gospodarka, opieka zdrowotna, podatki, edukacja, wybory, imigracja
+    \item 12 791 wypowiedzi z PolitiFact (train 10 240 / val 1 284 / test 1 267)
+    \item Treść + mówca, partia, temat, historia prawdziwości
+    \item Tematy: gospodarka, zdrowie, podatki, edukacja, wybory, imigracja
+    \item Granice między 6 klasami są subiektywne -- nawet sami fact-checkerzy
+          z PolitiFact często nie są zgodni przy przypisywaniu wypowiedzi do
+          jednej z sześciu etykiet
   \end{itemize}
 
   \vspace{0.5em}
-  \textbf{Trudność:}
-  \begin{itemize}
-    \item Niezbalansowane klasy (najrzadsza \texttt{pants-fire} = 8\%)
-    \item Granice między klasami subiektywne -- nawet fact-checkerzy się nie zgadzają
-    \item Wymaga wiedzy o świecie, nie tylko analizy stylu
-  \end{itemize}
+  \scriptsize
+  \begin{center}
+  \begin{tabular}{lp{6cm}}
+    \toprule
+    Zbiór & Co zawiera \\
+    \midrule
+    \textbf{LIAR}      & treść + metadane mówcy \\
+    \textbf{LIAR-PLUS} & LIAR + \texttt{justification} (uzasadnienie fact-checkera) \\
+    LIAR2              & rozszerzona wersja (~22k wypowiedzi, 2024) \\
+    LIAR-RAW           & surowe dane scrapowane z PolitiFact \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
 \end{frame}
 
 \begin{frame}{Rozkład klas w zbiorze LIAR}
   \begin{center}
     \includegraphics[width=0.95\textwidth]{label_distribution.png}
   \end{center}
-  Klasa \texttt{pants-fire} (8{,}2\%) zdecydowanie najrzadsza;
-  pozostałe stosunkowo zbalansowane (16--21\%).
 \end{frame}
 
 \begin{frame}{Struktura zbioru LIAR}
@@ -104,8 +113,9 @@
     \item Mapowanie etykiet 6kl $\to$ 2kl (\emph{tylko dla modeli dwuklasowych}):
           \texttt{pants-fire/false/barely-true} $\to$ \texttt{fake},\\
           \texttt{half-true/mostly-true/true} $\to$ \texttt{real}
-    \item Tokenizacja \texttt{AutoTokenizer} (RoBERTa BPE), max\_length=128
-    \item 99{,}96\% wypowiedzi mieści się w 128 tokenach (mediana = 22)
+    \item 99{,}96\% wypowiedzi mieści się w 128 tokenach (mediana = 22) --
+          stąd \texttt{max\_length=128} w tokenizacji
+    \item Tokenizacja \texttt{AutoTokenizer}: BPE dla RoBERTy, WordPiece dla BERT-a
     \item Wagi klas: $w_c = N/(C \cdot n_c)$
           przeciwdziałają niezbalansowaniu
     \item Tensory \texttt{input\_ids}, \texttt{attention\_mask}, \texttt{labels}
@@ -113,21 +123,57 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Performance Ceiling}
-  Systematyczny przegląd literatury (emergentmind.com) potwierdza:
-  \begin{itemize}
-    \item \textbf{6kl}: accuracy nie przekracza $\sim$0{,}32
-    \item \textbf{2kl}: $\sim$0{,}62 (SVM/RoBERTa baseline)
-    \item Modele drzewiaste: 99\% train, ale 25\% test = czysty overfit
-  \end{itemize}
+\begin{frame}{Performance Ceiling -- wyniki z literatury}
+  \scriptsize
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \textbf{Wang 2017 -- oryginalny paper LIAR (6kl)}\\[2pt]
+      \begin{tabular}{lrr}
+        \toprule
+        Models               & Valid. & Test \\
+        \midrule
+        Majority             & 0{,}204 & 0{,}208 \\
+        SVMs                 & 0{,}258 & 0{,}255 \\
+        Logistic Regression  & 0{,}257 & 0{,}247 \\
+        Bi-LSTMs             & 0{,}223 & 0{,}233 \\
+        CNNs                 & 0{,}260 & 0{,}270 \\
+        \midrule
+        \multicolumn{3}{l}{Hybrid CNNs} \\
+        Text + Subject       & 0{,}263 & 0{,}235 \\
+        Text + Speaker       & \textbf{0{,}277} & 0{,}248 \\
+        Text + Job           & 0{,}270 & 0{,}258 \\
+        Text + State         & 0{,}246 & 0{,}256 \\
+        Text + Party         & 0{,}259 & 0{,}248 \\
+        Text + Context       & 0{,}251 & 0{,}243 \\
+        Text + History       & 0{,}246 & 0{,}241 \\
+        Text + All           & 0{,}247 & \textbf{0{,}274} \\
+        \bottomrule
+      \end{tabular}\\[2pt]
+      {\tiny Źródło: Wang (ACL 2017)}
+    \end{column}
 
-  \vspace{0.5em}
-  Nawet Wang 2017 (oryginalny paper LIAR) osiągnął tylko \textbf{0{,}274 acc} dla 6kl.
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tabular}{lrr}
+        \toprule
+        Model & Test Acc & W-F1 \\
+        \midrule
+        Linear SVM (BoW) -- 2kl                  & 0{,}624 & 0{,}316 \\
+        RoBERTa (prior) -- 2kl                   & 0{,}620 & -- \\
+        XGBoost (GloVe, overfit) -- 6kl          & 0{,}249 & -- \\
+        GPT-3 Curie (fine-tuned) -- 6kl          & 0{,}295 & -- \\
+        \bottomrule
+      \end{tabular}\\[2pt]
+      {\tiny Źródło: emergentmind.com/topics/liar-benchmark}
+
+    \end{column}
+  \end{columns}
 \end{frame}
 
 \section{Metody}
 
-\begin{frame}{RoBERTa -- czym jest i dlaczego ją wybraliśmy}
+\begin{frame}{BERT vs RoBERTa}
   \small
   \textbf{RoBERTa} (Robustly Optimized BERT, Liu et al.\ 2019) -- model
   językowy typu \emph{encoder-only}, oparty na architekturze Transformer.
@@ -155,41 +201,34 @@
   \end{center}
 
   \vspace{0.3em}
-  \textbf{Wybór \texttt{roberta-large} (355M parametrów):}
+  \scriptsize
+  \textbf{Testujemy obie wersje -- \texttt{roberta-base} i \texttt{roberta-large}:}
   \begin{itemize}
-    \item Bogatsza wiedza ogólna -- 10$\times$ większy korpus istotny w domenie newsów
-    \item Lepsze reprezentacje pojedynczych zdań (brak NSP) -- pasuje do klasyfikacji
-    \item Test 2kl: \textbf{0{,}738} vs BERT-base $\sim$0{,}65 (literatura)
+    \item \texttt{roberta-base} (125M par., 12 warstw, hidden 768) -- mniejszy,
+          szybszy do trenowania
+    \item \texttt{roberta-large} (355M par., 24 warstwy, hidden 1024) --
+          spodziewamy się wyższych wyników kosztem dłuższego treningu
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Wybór metryki: macro-F1}
+\begin{frame}{Metryki ewaluacji}
   \small
-  Klasyfikacja LIAR jest \textbf{niezbalansowana} -- klasy mają różne
-  liczebności (\texttt{pants-fire} 8\% vs \texttt{half-true} 21\%).
-
-  \vspace{0.3em}
-  \textbf{Co stosujemy:}
+  \textbf{Stosowane metryki:}
   \begin{itemize}
-    \item \textbf{macro-F1} -- średnia arytmetyczna F1 dla każdej klasy,
-          \emph{bez ważenia liczebnością}.
-    \item Każda klasa liczy się tak samo, niezależnie od support.
+    \item \textbf{accuracy} -- udział poprawnych predykcji
+    \item \textbf{precision}, \textbf{recall} per klasa (oraz średnie macro / weighted)
+    \item \textbf{F1} per klasa -- $F_1 = \dfrac{2 \cdot \text{precision} \cdot \text{recall}}{\text{precision} + \text{recall}}$
+    \item \textbf{weighted-F1} -- średnia F1 ważona supportem klas
+    \item \textbf{\underline{macro-F1}} -- nasza główna metryka:
+    \[
+      \text{macro-F1} = \frac{1}{C} \sum_{c=1}^{C} F_1^{(c)}
+    \]
+    średnia arytmetyczna F1 z każdej klasy, bez ważenia liczebnością --
+    traktuje każdą klasę jednakowo i karze model za ignorowanie klas rzadkich,
+    kluczowych w fact-checkingu (np. \texttt{pants-fire})
+    \item \textbf{ROC AUC} (one-vs-rest) -- jak dobrze model rankuje klasy
+    \item \textbf{macierz pomyłek} -- które klasy mylą się ze sobą
   \end{itemize}
-
-  \vspace{0.3em}
-  \textbf{Czemu nie accuracy / weighted-F1:}
-  \begin{itemize}
-    \item Model przewidujący zawsze \texttt{half-true} dostałby
-          accuracy 21\% za darmo, choć kompletnie nie umie klasyfikować
-    \item Weighted-F1 jest dominowane przez klasy większościowe --
-          maskuje słabe wyniki na rzadkich klasach (\texttt{pants-fire})
-    \item Macro-F1 \textbf{karze} model za ignorowanie klas mniejszościowych
-          -- co jest krytyczne w fact-checkingu (najgorsze kłamstwa
-          \texttt{pants-fire} są też najrzadsze)
-  \end{itemize}
-
-  \textbf{Wniosek:} macro-F1 mierzy rzeczywistą zdolność modelu do
-  rozpoznawania wszystkich klas, nie tylko tych łatwych.
 \end{frame}
 
 \begin{frame}{Techniki podnoszące jakość}
@@ -198,15 +237,12 @@
     \item \textbf{Label smoothing} ($\varepsilon = 0{,}1$)
     \item \textbf{Optuna} -- 20 triali, TPE sampler, MedianPruner
     \item \textbf{Early stopping} po val macro-F1
-    \item \textbf{Mixed precision bfloat16} -- 2$\times$ szybciej na A100
     \item \textbf{Linear warmup + decay} schedulera lr
     \item \textbf{Structured Outputs} (GPT) -- JSON schema, 0 unparsed
     \item \textbf{Self-consistency} (GPT) -- N=3 niezależne predykcje + voting
     \item \textbf{Few-shot kNN retrieval} -- TF-IDF cosine similarity
   \end{itemize}
 
-  \vspace{0.5em}
-  \textbf{Selekcja po macro-F1, nie accuracy} -- niezbalansowane klasy.
 \end{frame}
 
 \begin{frame}{Optuna -- automatyczne strojenie hiperparametrów}
@@ -223,9 +259,15 @@
               (poniżej mediany), oszczędza GPU
       \end{itemize}
 
-      \textbf{Po co:} 50 kombinacji ręcznie = dni GPU; Optuna 20 prób = 2h.
+      \textbf{Uzasadnienie użycia:} 50 kombinacji ręcznie = dni GPU; Optuna 20 prób = 2h.
 
       \textbf{Efekt:} val F1 $0{,}71 \to \textbf{0{,}7435}$ (+3 pkt).
+
+      \vspace{0.3em}
+      \scriptsize
+      Best params z 2kl stosujemy też do treningu 6kl (i 6kl + LIAR-PLUS),
+      czasem z ręcznym dopasowaniem (\texttt{epochs}, \texttt{weight\_decay})
+      pod większą trudność zadania.
     \end{column}
     \begin{column}{0.45\textwidth}
       \small
@@ -250,68 +292,49 @@
 
 \section{Wyniki}
 
-\begin{frame}{Wyniki -- klasyfikacja binarna (2kl)}
+\begin{frame}{Wyniki -- GPT (OpenAI API) + darmowe LLM}
+  \scriptsize
   \begin{center}
-  \begin{tabular}{lrr}
+  \begin{tabular}{lrrrr}
     \toprule
-    Model & accuracy & macro-F1 \\
+    Model & 2kl Acc & 2kl Macro-F1 & 6kl Acc & 6kl Macro-F1 \\
     \midrule
-    GPT-4o-mini zero-shot     & 0{,}696 & 0{,}695 \\
-    GPT-4o-mini few-shot      & 0{,}693 & 0{,}686 \\
-    GPT-4o zero-shot (SC=3)   & 0{,}729 & 0{,}729 \\
-    \textbf{RoBERTa-large + Optuna} & \textbf{0{,}738} & \textbf{0{,}728} \\
+    \multicolumn{5}{l}{\textbf{OpenRouter (darmowe)} \emph{-- w trakcie ewaluacji}} \\
+    gpt-oss-20b (ZS)                     & 0{,}467 & 0{,}407 & --- & --- \\
+    gemma-4-31b-it                       & --- & --- & --- & --- \\
+    dolphin-mistral-24b                  & --- & --- & --- & --- \\
+    llama-3.3-70b-instruct               & --- & --- & --- & --- \\
+    \midrule
+    \multicolumn{5}{l}{\textbf{GPT (OpenAI, płatne)}} \\
+    GPT-4o-mini zero-shot                & 0{,}696 & 0{,}695 & 0{,}298 & 0{,}279 \\
+    GPT-4o-mini few-shot                 & 0{,}693 & 0{,}686 & 0{,}324 & 0{,}310 \\
+    GPT-4o zero-shot (SC=3, SO)          & \textbf{0{,}729} & \textbf{0{,}729} & --- & --- \\
+    GPT-4o few-shot                      & 0{,}710 & 0{,}709 & \textbf{0{,}344} & \textbf{0{,}356} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Wyniki -- fine-tuning encoderów}
+  \small
+  \begin{center}
+  \begin{tabular}{lrrrr}
+    \toprule
+    Model & 2kl Acc & 2kl Macro-F1 & 6kl Acc & 6kl Macro-F1 \\
+    \midrule
+    BERT-base-uncased                    & 0{,}628 & 0{,}604 & --- & --- \\
+    RoBERTa-base                         & 0{,}640 & 0{,}622 & --- & --- \\
+    \textbf{RoBERTa-large baseline}      & \textbf{0{,}738} & \textbf{0{,}728} & --- & --- \\
+    RoBERTa-large + Optuna               & --- & --- & 0{,}357 & 0{,}359 \\
+    RoBERTa-large + LIAR-PLUS            & --- & --- & 0{,}355 & 0{,}341 \\
     \bottomrule
   \end{tabular}
   \end{center}
 
-  \vspace{0.5em}
-  RoBERTa fine-tuned bije GPT-4o pricingiem 0$\$$ inferencji.
-  \\ Bije \textbf{baseline z literatury} (RoBERTa $\sim$0{,}62) o \textbf{+12 pkt}.
 \end{frame}
 
-\begin{frame}{Wyniki -- klasyfikacja 6-klasowa}
-  \begin{center}
-  \begin{tabular}{lrr}
-    \toprule
-    Model & accuracy & macro-F1 \\
-    \midrule
-    GPT-4o-mini zero-shot       & 0{,}298 & 0{,}279 \\
-    GPT-4o-mini few-shot        & 0{,}324 & 0{,}310 \\
-    GPT-4o few-shot (K=1, SC=1) & 0{,}344 & 0{,}356 \\
-    RoBERTa-large + Optuna      & 0{,}357 & 0{,}359 \\
-    \textbf{RoBERTa-large + LIAR-PLUS} & \textbf{0{,}383} & \textbf{0{,}380} \\
-    \midrule
-    Wang 2017 (Hybrid CNN + meta) & 0{,}274 & -- \\
-    \emph{Performance ceiling lit.} & $\sim$0{,}32 & -- \\
-    \bottomrule
-  \end{tabular}
-  \end{center}
-
-  \vspace{0.5em}
-  Wyraźnie powyżej sufitu literatury (0{,}32) dzięki LIAR-PLUS.
-\end{frame}
-
-\begin{frame}{LIAR-PLUS -- dodanie justification}
-  Rozszerzona wersja LIAR (Alhindi 2018):
+\begin{frame}{LLM prompting -- techniki GPT}
   \begin{itemize}
-    \item Dodaje pole \texttt{justification} -- uzasadnienie fact-checkera
-    \item 99\% próbek ma niepuste pole
-    \item Median długości tekstu: 22 $\to$ 100 tokenów
-    \item Max\_length tokenizacji: 128 $\to$ 256
-  \end{itemize}
-
-  \vspace{0.5em}
-  \textbf{Efekt na 6kl:}
-  \begin{itemize}
-    \item Accuracy: $0{,}357 \to 0{,}383$ (+2{,}6 pkt)
-    \item Macro-F1: $0{,}359 \to 0{,}380$ (+2{,}1 pkt)
-    \item ROC AUC: $0{,}77$ -- model dobrze rankuje, nawet jeśli granice klas są rozmyte
-  \end{itemize}
-\end{frame}
-
-\begin{frame}{LLM prompting -- GPT (OpenAI API)}
-  \begin{itemize}
-    \item \texttt{gpt-4o-mini} i \texttt{gpt-4o}
     \item \textbf{Structured Outputs} -- każemy modelowi odpowiadać
           tylko jednym słowem (\texttt{fake} lub \texttt{true}),
           zero zbędnego tekstu
@@ -321,40 +344,6 @@
     \item \textbf{Self-consistency} -- pytamy model 3 razy,
           bierzemy odpowiedź, która padła najczęściej
   \end{itemize}
-
-  \vspace{0.5em}
-  \small
-  \begin{center}
-  \begin{tabular}{lrrrr}
-    \toprule
-    Model & 2kl acc & 2kl F1 & 6kl acc & 6kl F1 \\
-    \midrule
-    GPT-4o-mini ZS    & 0{,}696 & 0{,}695 & 0{,}298 & 0{,}279 \\
-    GPT-4o-mini FS    & 0{,}693 & 0{,}686 & 0{,}324 & 0{,}310 \\
-    GPT-4o ZS (SC=3)  & \textbf{0{,}729} & \textbf{0{,}729} & --- & --- \\
-    GPT-4o FS         & 0{,}710 & 0{,}709 & \textbf{0{,}344} & \textbf{0{,}356} \\
-    \bottomrule
-  \end{tabular}
-  \end{center}
-\end{frame}
-
-\begin{frame}{Zestawienie fine-tuningu (encoder)}
-  \small
-  \begin{center}
-  \begin{tabular}{lcccc}
-    \toprule
-    Model & 2kl Acc & 2kl Macro-F1 & 6kl Acc & 6kl Macro-F1 \\
-    \midrule
-    BERT-base-uncased            & 0{,}628 & 0{,}604 & --- & --- \\
-    RoBERTa-base                  & 0{,}640 & 0{,}622 & --- & --- \\
-    \textbf{RoBERTa-large}        & \textbf{0{,}738} & \textbf{0{,}728} & 0{,}357 & 0{,}359 \\
-    \textbf{RoBERTa-large + LIAR-PLUS} & --- & --- & \textbf{0{,}383} & \textbf{0{,}380} \\
-    \bottomrule
-  \end{tabular}
-  \end{center}
-
-  \vspace{0.5em}
-  BERT i RoBERTa-base testowane tylko na 2kl.
 \end{frame}
 
 \begin{frame}{Najlepsze wyniki z każdej kategorii}
@@ -364,7 +353,7 @@
     \toprule
     Kategoria & Model & 2kl Macro-F1 & 6kl Macro-F1 \\
     \midrule
-    Encoder (fine-tune) & RoBERTa-large (+ LIAR-PLUS na 6kl) & \textbf{0{,}728} & \textbf{0{,}380} \\
+    Encoder (fine-tune) & RoBERTa-large (+ LIAR-PLUS na 6kl) & \textbf{0{,}728} & 0{,}341 \\
     LLM płatny (API)    & gpt-4o (SC=3, SO / few-shot)       & 0{,}729          & 0{,}356 \\
     \bottomrule
   \end{tabular}
@@ -373,20 +362,8 @@
   \vspace{0.5em}
   \begin{itemize}
     \item 2kl: \textbf{remis} -- RoBERTa-large $\approx$ gpt-4o (0{,}728 vs 0{,}729)
-    \item 6kl: \textbf{RoBERTa-large + LIAR-PLUS wygrywa} (0{,}380 vs 0{,}356) -- pole \texttt{justification} daje przewagę nad samym promptingiem
+    \item 6kl: \textbf{GPT-4o} (0{,}356) nieznacznie wyprzedza RoBERTa-large + LIAR-PLUS (0{,}341)
   \end{itemize}
-\end{frame}
-
-\begin{frame}{Trudność wariantu 6-klasowego}
-  Dlaczego 6kl jest dramatycznie trudniejsze:
-  \begin{enumerate}
-    \item \textbf{Subiektywność} -- granice \texttt{barely-/half-/mostly-true}
-          nawet dla anotatorów PolitiFact są niejednoznaczne
-    \item \textbf{Wymaga wiedzy o świecie} -- RoBERTa pretrenowana
-          na Wikipedia/książkach, nie aktualnych newsach politycznych
-    \item \textbf{Niezbalansowane klasy} -- \texttt{pants-fire} tylko 8\%
-    \item \textbf{Anotacyjny sufit} -- ludzki ekspert też nie osiąga 100\% zgodności
-  \end{enumerate}
 \end{frame}
 
 \begin{frame}{Czas wykonania}
