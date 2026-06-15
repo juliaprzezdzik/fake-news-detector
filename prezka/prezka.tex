@@ -407,7 +407,10 @@
             \item 6kl: GPT-4o $\geq$ RoBERTa (wiedza o świecie)
             \item RoBERTa-large + LIAR-PLUS -- nasze najlepsze 6kl
           \end{itemize}
-    \item \textbf{Few-shot nie pomaga} w fact-checkingu (brak transferu wiedzy)
+    \item \textbf{Few-shot nie pomaga} w fact-checkingu -- przykłady
+          uczą modelu \emph{formatu odpowiedzi}, ale nie dostarczają wiedzy
+          potrzebnej do oceny prawdziwości nowej, niezwiązanej wypowiedzi
+          (prawdziwość zależy od faktów o świecie, nie od wzorca)
     \item \textbf{Structured Outputs} -- musi być (z 11\% unparsed do 0\%)
     \item \textbf{Macro-F1, nie accuracy} -- niezbalansowane klasy
     \item \textbf{Performance ceiling 6kl} ($\sim$0{,}32) przekroczyliśmy dzięki LIAR-PLUS
