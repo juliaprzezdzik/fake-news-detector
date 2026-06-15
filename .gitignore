@@ -13,3 +13,6 @@ __pycache__/
 *.out
 *.snm
 *.toc
+todo.txt
+.DS_Store
+.venv/
