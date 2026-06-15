@@ -24,8 +24,8 @@
   \vspace{0.5em}
   Dwa warianty zadania:
   \begin{itemize}
-    \item \textbf{Binarna (2kl)}: \texttt{fake} / \texttt{real}
-    \item \textbf{Sześcioklasowa (6kl)}: \texttt{pants-fire}, \texttt{false},
+    \item \textbf{Binarna}: \texttt{fake} / \texttt{real}
+    \item \textbf{Sześcioklasowa}: \texttt{pants-fire}, \texttt{false},
           \texttt{barely-true}, \texttt{half-true}, \texttt{mostly-true}, \texttt{true}
   \end{itemize}
 
@@ -63,6 +63,29 @@
     \bottomrule
   \end{tabular}
   \end{center}
+\end{frame}
+
+\begin{frame}{Przykładowe wypowiedzi z LIAR}
+  \scriptsize
+  \begin{itemize}
+    \item \texttt{[pants-fire]} \emph{Says under his budget-repair bill,
+          collective bargaining is fully intact.}
+    \item \texttt{[false]} \emph{If the Supreme Court throws out the federal
+          health care law, it would be an unprecedented, extraordinary step
+          of overturning a law that was passed by a strong majority of a
+          democratically elected Congress.}
+    \item \texttt{[barely-true]} \emph{With Obamacare, we're fixing to get hit
+          with the biggest entitlement program the American taxpayers have
+          ever seen.}
+    \item \texttt{[half-true]} \emph{Since the passage of the Affordable Care
+          Act, U.S. health care spending grew at 3.9 percent for the last
+          three years, the lowest growth rate in over 50 years.}
+    \item \texttt{[mostly-true]} \emph{There are more members of the U.S.
+          Senate than the number of WI families who would benefit from
+          GOP estate tax break.}
+    \item \texttt{[true]} \emph{Says he cut taxes by more than \$600 million
+          when he was governor.}
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Rozkład klas w zbiorze LIAR}
@@ -121,6 +144,44 @@
     \item Tensory \texttt{input\_ids}, \texttt{attention\_mask}, \texttt{labels}
           opakowane w \texttt{DataLoader}
   \end{itemize}
+\end{frame}
+
+\begin{frame}{Preprocessing i tokenizacja}
+  \small
+  \textbf{Preprocessing:}
+  \begin{itemize}
+    \item lowercase -- \texttt{str.lower()}
+    \item usunięcie URL-i -- \texttt{re.sub()}
+    \item usunięcie interpunkcji -- \texttt{re.sub() + string.punctuation}
+  \end{itemize}
+
+  \vspace{0.3em}
+  \textbf{PRZED:} \texttt{Says the economy is doing better than ever!}\\[2pt]
+  \textbf{PO:} \texttt{says the economy is doing better than ever}
+
+  \vspace{0.7em}
+  \textbf{Tokenizacja:} \texttt{AutoTokenizer} zamienia tekst na 2 wektory --
+  \texttt{input\_ids} (ID tokenów + \texttt{<s>}/\texttt{</s>} + padding)
+  oraz \texttt{attention\_mask} (1 = token, 0 = padding).
+
+  \vspace{0.3em}
+  \textbf{Tekst:} \texttt{Says the economy is doing better than ever.}\\[2pt]
+  \textbf{Tokeny:}\\
+  \texttt{['<s>', 'S', 'ays', 'Ġthe', 'Ġeconomy', 'Ġis', 'Ġdoing',\\
+  'Ġbetter', 'Ġthan', 'Ġever', '.', '</s>']}\\[2pt]
+  \textbf{IDs:} \texttt{[0, 104, 4113, 5, 866, 16, 608, 357, 87, 655, 4, 2]}
+
+  \vspace{0.5em}
+  \footnotesize
+  Prefiks \texttt{Ġ} = spacja przed tokenem. \texttt{<s>}/\texttt{</s>} = znaczniki początku/końca.
+\end{frame}
+
+\begin{frame}{Rozkład długości wypowiedzi}
+  \begin{center}
+    \includegraphics[width=0.95\textwidth]{token_length_distribution.png}
+  \end{center}
+  Mediana = 22 tokeny, średnia = 24{,}1. Stąd \texttt{max\_length=128}
+  w tokenizacji.
 \end{frame}
 
 \begin{frame}{Performance Ceiling -- wyniki z literatury}
@@ -215,19 +276,19 @@
   \small
   \textbf{Stosowane metryki:}
   \begin{itemize}
-    \item \textbf{accuracy} -- udział poprawnych predykcji
-    \item \textbf{precision}, \textbf{recall} per klasa (oraz średnie macro / weighted)
-    \item \textbf{F1} per klasa -- $F_1 = \dfrac{2 \cdot \text{precision} \cdot \text{recall}}{\text{precision} + \text{recall}}$
-    \item \textbf{weighted-F1} -- średnia F1 ważona supportem klas
-    \item \textbf{\underline{macro-F1}} -- nasza główna metryka:
+    \item \textbf{Accuracy} -- udział poprawnych predykcji
+    \item \textbf{Precision}, \textbf{Recall} per klasa (oraz średnie macro / weighted)
+    \item \textbf{F1} per klasa -- $F_1 = \dfrac{2 \cdot \text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}$
+    \item \textbf{Weighted-F1} -- średnia F1 ważona supportem klas
+    \item \textbf{\underline{Macro-F1}} -- nasza główna metryka:
     \[
-      \text{macro-F1} = \frac{1}{C} \sum_{c=1}^{C} F_1^{(c)}
+      \text{Macro-F1} = \frac{1}{C} \sum_{c=1}^{C} F_1^{(c)}
     \]
     średnia arytmetyczna F1 z każdej klasy, bez ważenia liczebnością --
     traktuje każdą klasę jednakowo i karze model za ignorowanie klas rzadkich,
     kluczowych w fact-checkingu (np. \texttt{pants-fire})
     \item \textbf{ROC AUC} (one-vs-rest) -- jak dobrze model rankuje klasy
-    \item \textbf{macierz pomyłek} -- które klasy mylą się ze sobą
+    \item \textbf{Macierz pomyłek} -- które klasy mylą się ze sobą
   \end{itemize}
 \end{frame}
 
@@ -292,29 +353,6 @@
 
 \section{Wyniki}
 
-\begin{frame}{Wyniki -- GPT (OpenAI API) + darmowe LLM}
-  \scriptsize
-  \begin{center}
-  \begin{tabular}{lrrrr}
-    \toprule
-    Model & 2kl Acc & 2kl Macro-F1 & 6kl Acc & 6kl Macro-F1 \\
-    \midrule
-    \multicolumn{5}{l}{\textbf{OpenRouter (darmowe)} \emph{-- w trakcie ewaluacji}} \\
-    gpt-oss-20b (ZS)                     & 0{,}467 & 0{,}407 & --- & --- \\
-    gemma-4-31b-it                       & --- & --- & --- & --- \\
-    dolphin-mistral-24b                  & --- & --- & --- & --- \\
-    llama-3.3-70b-instruct               & --- & --- & --- & --- \\
-    \midrule
-    \multicolumn{5}{l}{\textbf{GPT (OpenAI, płatne)}} \\
-    GPT-4o-mini zero-shot                & 0{,}696 & 0{,}695 & 0{,}298 & 0{,}279 \\
-    GPT-4o-mini few-shot                 & 0{,}693 & 0{,}686 & 0{,}324 & 0{,}310 \\
-    GPT-4o zero-shot (SC=3, SO)          & \textbf{0{,}729} & \textbf{0{,}729} & --- & --- \\
-    GPT-4o few-shot                      & 0{,}710 & 0{,}709 & \textbf{0{,}344} & \textbf{0{,}356} \\
-    \bottomrule
-  \end{tabular}
-  \end{center}
-\end{frame}
-
 \begin{frame}{Wyniki -- fine-tuning encoderów}
   \small
   \begin{center}
@@ -330,20 +368,92 @@
     \bottomrule
   \end{tabular}
   \end{center}
-
 \end{frame}
 
-\begin{frame}{LLM prompting -- techniki GPT}
+\begin{frame}{Tryby promptingu + darmowe LLM z OpenRouter}
+  \scriptsize
+  \textbf{Tryby promptingu:}
   \begin{itemize}
-    \item \textbf{Structured Outputs} -- każemy modelowi odpowiadać
-          tylko jednym słowem (\texttt{fake} lub \texttt{true}),
-          zero zbędnego tekstu
-    \item \textbf{Few-shot kNN} -- wklejamy do promptu kilka
-          przykładów ze zbioru treningowego najbardziej podobnych
-          do pytanego zdania
-    \item \textbf{Self-consistency} -- pytamy model 3 razy,
-          bierzemy odpowiedź, która padła najczęściej
+    \item \textbf{Zero-shot} -- tylko polecenie i zdanie do oceny, bez przykładów
+    \item \textbf{Few-shot} -- przed pytanym zdaniem wklejamy K oznaczonych
+          przykładów na klasę (model uczy się wzorca w locie)
   \end{itemize}
+
+  \vspace{0.3em}
+  \textbf{Darmowe modele (OpenRouter)} -- wszystkie to dekoder-only Transformery,
+  różnią się głównie producentem, wielkością i specjalizacją:
+  \begin{center}
+  \begin{tabular}{lll}
+    \toprule
+    Model & Wielkość & Specyfika \\
+    \midrule
+    \textbf{gpt-oss-20b}            & 20B & Model z trybem \emph{reasoning} -- najpierw rozumuje \\
+    \textbf{gemma-4-31b-it}         & 31B & Instrukcyjnie strojony, mocny w zadaniach tekstowych \\
+    \textbf{dolphin-mistral-24b}    & 24B & ,,Uncensored'' -- bez filtrów bezpieczeństwa \\
+    \textbf{llama-3.3-70b-instruct} & 70B & Największy z czwórki, flagowy open-source od Mety \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Techniki użyte w GPT + porównanie modeli}
+  \scriptsize
+  \textbf{Techniki użyte w GPT:}
+  \begin{itemize}
+    \item \textbf{Structured Outputs} -- model odpowiada tylko jednym słowem
+    \item \textbf{Few-shot kNN} -- wklejamy przykłady o najpodobniejszej
+          tematyce zamiast losowych
+    \item \textbf{Self-consistency} -- pytamy 3 razy, większościowe głosowanie
+    \item \textbf{Asynchroniczne zapytania} -- równoległe wywołania API;
+          redukuje czas runu z $\sim$30 min do $\sim$3 min. Wartość
+          \texttt{CONCURRENCY} dobrana do limitu rate limit danego modelu:
+          20 dla gpt-4o-mini, 8 dla gpt-4o
+  \end{itemize}
+
+  \vspace{0.3em}
+  \textbf{gpt-4o-mini vs gpt-4o:}
+  \begin{center}
+  \begin{tabular}{lll}
+    \toprule
+     & \textbf{gpt-4o-mini} & \textbf{gpt-4o} \\
+    \midrule
+    Wielkość       & $\sim$8B & $\sim$200B \\
+    Cena (in/out)  & \$0.15 / \$0.60 per 1M ($\sim$17$\times$ tańszy) & \$2.50 / \$10 per 1M \\
+    Szybkość       & $\sim$2$\times$ szybszy & wolniejszy \\
+    Jakość         & słabszy w trudnych zadaniach & flagowy \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Wyniki -- GPT (OpenAI API) + darmowe LLM}
+  \scriptsize
+  \begin{center}
+  \begin{tabular}{lrrrr}
+    \toprule
+    Model & 2kl Acc & 2kl Macro-F1 & 6kl Acc & 6kl Macro-F1 \\
+    \midrule
+    \multicolumn{5}{l}{\textbf{OpenRouter (darmowe)}} \\
+    gpt-oss-20b zero-shot                & 0{,}467 & 0{,}407 & --- & --- \\
+    gpt-oss-20b few-shot                 & 0{,}500 & 0{,}467 & --- & --- \\
+    gemma-4-31b-it zero-shot$^\star$     & 0{,}442 & 0{,}306 & --- & --- \\
+    gemma-4-31b-it few-shot$^\star$      & 0{,}442 & 0{,}306 & --- & --- \\
+    dolphin-mistral-24b zero-shot$^\star$ & 0{,}442 & 0{,}306 & --- & --- \\
+    dolphin-mistral-24b few-shot$^\star$  & 0{,}442 & 0{,}306 & --- & --- \\
+    llama-3.3-70b-instruct few-shot$^\star$ & 0{,}442 & 0{,}306 & --- & --- \\
+    \midrule
+    \multicolumn{5}{l}{\textbf{GPT (OpenAI, płatne)}} \\
+    GPT-4o-mini zero-shot                & 0{,}696 & 0{,}695 & 0{,}298 & 0{,}279 \\
+    GPT-4o-mini few-shot                 & 0{,}693 & 0{,}686 & 0{,}324 & 0{,}310 \\
+    GPT-4o zero-shot (SC=3, SO)          & \textbf{0{,}729} & \textbf{0{,}729} & --- & --- \\
+    GPT-4o few-shot                      & 0{,}710 & 0{,}709 & \textbf{0{,}344} & \textbf{0{,}356} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \vspace{0.3em}
+  \scriptsize $^\star$ gemma-4-31b-it, dolphin-mistral-24b i llama-3.3-70b:
+  120/120 odpowiedzi nie sparsowało się, fallback przypisał wszystko do
+  \texttt{fake} -- wynik niereprezentatywny.
 \end{frame}
 
 \begin{frame}{Najlepsze wyniki z każdej kategorii}
@@ -353,8 +463,8 @@
     \toprule
     Kategoria & Model & 2kl Macro-F1 & 6kl Macro-F1 \\
     \midrule
-    Encoder (fine-tune) & RoBERTa-large (+ LIAR-PLUS na 6kl) & \textbf{0{,}728} & 0{,}341 \\
-    LLM płatny (API)    & gpt-4o (SC=3, SO / few-shot)       & 0{,}729          & 0{,}356 \\
+    Encoder       & RoBERTa-large (+ LIAR-PLUS na 6kl) & \textbf{0{,}728} & 0{,}341 \\
+    LLM płatny    & gpt-4o (SC=3, SO / few-shot)       & 0{,}729          & 0{,}356 \\
     \bottomrule
   \end{tabular}
   \end{center}
