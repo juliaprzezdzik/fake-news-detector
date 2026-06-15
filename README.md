@@ -3,6 +3,10 @@
 Binary classification of political statements on the LIAR
 dataset using RoBERTa fine-tuning.
 
+## Prezentacja
+
+[Pobierz prezentacje projektu](https://github.com/juliaprzezdzik/fake-news-detector/raw/dev/prezka/prezka.pdf)
+
 ## Data
 
 [LIAR dataset](https://www.cs.ucsb.edu/~william/data/liar_dataset.zip) — 12,791
