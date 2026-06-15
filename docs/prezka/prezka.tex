@@ -101,7 +101,7 @@
   \end{quote}
 
   \begin{itemize}
-    \item Mapowanie etykiet 6kl $\to$ 2kl:
+    \item Mapowanie etykiet 6kl $\to$ 2kl (\emph{tylko dla modeli dwuklasowych}):
           \texttt{pants-fire/false/barely-true} $\to$ \texttt{fake},\\
           \texttt{half-true/mostly-true/true} $\to$ \texttt{real}
     \item Tokenizacja \texttt{AutoTokenizer} (RoBERTa BPE), max\_length=128
@@ -312,11 +312,14 @@
 \begin{frame}{LLM prompting -- GPT (OpenAI API)}
   \begin{itemize}
     \item \texttt{gpt-4o-mini} i \texttt{gpt-4o}
-    \item \textbf{Structured Outputs}: JSON schema, enum etykiet
-          $\to$ 0\% unparsed
-    \item \textbf{Few-shot kNN}: K demo na klasę przez TF-IDF cosine
-    \item \textbf{Self-consistency}: N niezależnych predykcji
-          + voting większościowy
+    \item \textbf{Structured Outputs} -- każemy modelowi odpowiadać
+          tylko jednym słowem (\texttt{fake} lub \texttt{true}),
+          zero zbędnego tekstu
+    \item \textbf{Few-shot kNN} -- wklejamy do promptu kilka
+          przykładów ze zbioru treningowego najbardziej podobnych
+          do pytanego zdania
+    \item \textbf{Self-consistency} -- pytamy model 3 razy,
+          bierzemy odpowiedź, która padła najczęściej
   \end{itemize}
 
   \vspace{0.5em}
