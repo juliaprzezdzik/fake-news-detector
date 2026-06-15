@@ -7,12 +7,7 @@
 texput.log
 __pycache__/
 .ipynb_checkpoints/
-*.aux
-*.log
-*.nav
-*.out
-*.snm
-*.toc
 todo.txt
 .DS_Store
 .venv/
+modele/*.pt
