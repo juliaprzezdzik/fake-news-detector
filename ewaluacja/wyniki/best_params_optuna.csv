@@ -1,0 +1,8 @@
+parametr,2kl,6kl
+learning_rate,5.79e-6,5.79e-6
+weight_decay,0.124,0.124
+epochs,4,3
+batch_size,8,8
+class_weights,True,True
+patience,2,2
+val_macro_f1,0.7256,0.3520

@@ -1,0 +1,10 @@
+klasa,precision,recall,f1,support
+pants-fire,0.72,0.36,0.48,91
+false,0.34,0.48,0.40,244
+barely-true,0.26,0.40,0.32,211
+half-true,0.28,0.36,0.32,263
+mostly-true,0.44,0.15,0.22,239
+true,0.51,0.32,0.39,206
+accuracy,,,0.34,1254
+macro avg,0.43,0.35,0.36,1254
+weighted avg,0.39,0.34,0.34,1254

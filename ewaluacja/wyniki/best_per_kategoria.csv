@@ -1,0 +1,6 @@
+kategoria,model,wariant,tryb,macro_f1
+Encoder fine-tune,RoBERTa-large + Optuna,2kl,fine-tune,0.726
+Encoder fine-tune,RoBERTa-large + Optuna,6kl,fine-tune,0.359
+LLM (OpenAI API),gpt-4o (SC=3 SO),2kl,zero-shot,0.729
+LLM (OpenAI API),gpt-4o (K=1 SO),6kl,few-shot kNN,0.356
+LLM darmowy (OpenRouter),gpt-oss-20b,2kl,few-shot,0.467

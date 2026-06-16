@@ -1,0 +1,14 @@
+model,wariant,tryb,accuracy,macro_f1,weighted_f1,uwagi
+BERT-base-uncased,2kl,fine-tune,0.628,0.604,,Szymon - fakenewsdet.ipynb
+RoBERTa-base,2kl,fine-tune,0.640,0.622,,Szymon - fakenewsdet.ipynb
+RoBERTa-large + Optuna,2kl,fine-tune,0.731,0.726,,baseline lr=5.79e-6 wd=0.124 epochs=4 bs=8 class_weights=True; ROC AUC=0.788
+RoBERTa-large + Optuna,6kl,fine-tune,0.357,0.359,,lr=5.79e-6 wd=0.124 epochs=3 bs=8 class_weights=True
+gpt-4o-mini,2kl,zero-shot,0.696,0.695,,OpenAI API
+gpt-4o-mini,2kl,few-shot kNN,0.693,0.686,,K=1 SC=1
+gpt-4o-mini,6kl,zero-shot,0.298,0.279,,OpenAI API
+gpt-4o-mini,6kl,few-shot kNN,0.324,0.310,,K=1 SC=1
+gpt-4o,2kl,zero-shot,0.729,0.729,,SC=3 SO (Structured Outputs) - najlepszy 2kl
+gpt-4o,2kl,few-shot kNN,0.710,0.709,,K=3 SC=3 SO
+gpt-4o,6kl,few-shot kNN,0.344,0.356,,K=1 SO - najlepszy GPT 6kl
+gpt-oss-20b,2kl,zero-shot,0.467,0.407,,OpenRouter darmowe; unparsed=48/120 (max_tokens=8 ucinal odpowiedzi)
+gpt-oss-20b,2kl,few-shot,0.500,0.467,,OpenRouter darmowe; po fix parsera

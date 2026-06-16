@@ -1,0 +1,6 @@
+klasa,precision,recall,f1,support
+fake,0.698,0.680,0.689,553
+real,0.757,0.772,0.764,714
+accuracy,,,0.732,1267
+macro avg,0.727,0.726,0.726,1267
+weighted avg,0.731,0.732,0.731,1267
