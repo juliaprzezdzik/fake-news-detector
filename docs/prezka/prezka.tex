@@ -48,8 +48,7 @@
   Porównujemy dwa paradygmaty:
   \begin{enumerate}
     \item \textbf{Fine-tuning encodera} -- BERT-base, RoBERTa-base, RoBERTa-large
-    \item \textbf{Prompting LLM} -- GPT-4o-mini, GPT-4o; darmowe (OpenRouter):
-          gpt-oss-20b, gemma-4-31b-it, dolphin-mistral-24b, llama-3.3-70b-instruct
+    \item \textbf{Prompting LLM} -- GPT-4o-mini, GPT-4o; gpt-oss-20b (OpenRouter)
   \end{enumerate}
 \end{frame}
 
@@ -316,7 +315,7 @@
     \item \textbf{Linear warmup + decay} schedulera lr
     \item \textbf{Structured Outputs} (GPT) -- JSON schema, 0 unparsed
     \item \textbf{Self-consistency} (GPT) -- N=3 niezależne predykcje + voting
-    \item \textbf{Few-shot kNN retrieval} -- TF-IDF cosine similarity
+    \item \textbf{Few-shot kNN retrieval} -- wybór najpodobniejszych przykładów
   \end{itemize}
 
 \end{frame}
@@ -346,20 +345,22 @@
       pod większą trudność zadania.
     \end{column}
     \begin{column}{0.45\textwidth}
-      \small
+      \scriptsize
       \centering
       \textbf{Best params:}
       \vspace{0.3em}
-      \begin{tabular}{lr}
+      \begin{tabular}{lrr}
         \toprule
-        parametr & wartość \\
+        parametr & 2kl & 6kl \\
         \midrule
-        learning rate & $5{,}79 \cdot 10^{-6}$ \\
-        weight decay  & $0{,}124$ \\
-        epochs        & 5 \\
-        batch size    & 8 \\
+        learning rate    & $5{,}79\!\cdot\!10^{-6}$ & $5{,}79\!\cdot\!10^{-6}$ \\
+        weight decay     & $0{,}124$ & $0{,}124$ \\
+        epochs           & 4 & 3 \\
+        batch size       & 8 & 8 \\
+        class weights    & tak & tak \\
+        patience         & 2 & 2 \\
         \midrule
-        \textbf{val F1} & \textbf{0{,}7370} \\
+        \textbf{val F1}  & \textbf{0{,}7256} & \textbf{0{,}3520} \\
         \bottomrule
       \end{tabular}
     \end{column}
@@ -377,7 +378,7 @@
     \midrule
     BERT-base-uncased                    & 0{,}628 & 0{,}604 & --- & --- \\
     RoBERTa-base                         & 0{,}640 & 0{,}622 & --- & --- \\
-    \textbf{RoBERTa-large + Optuna}      & \textbf{0{,}738} & \textbf{0{,}728} & \textbf{0{,}357} & \textbf{0{,}359} \\
+    \textbf{RoBERTa-large + Optuna}      & \textbf{0{,}731} & \textbf{0{,}726} & \textbf{0{,}357} & \textbf{0{,}359} \\
     RoBERTa-large + LIAR-PLUS            & --- & --- & 0{,}355 & 0{,}341 \\
     \bottomrule
   \end{tabular}
@@ -413,6 +414,12 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}{RoBERTa-large + Optuna (2kl) -- krzywe uczenia}
+  \begin{center}
+    \includegraphics[width=0.95\textwidth]{loss_roberta_2cl_baseline.png}
+  \end{center}
+\end{frame}
+
 \begin{frame}{Najlepszy wynik RoBERTa-large + Optuna (6kl)}
   \scriptsize
   \begin{columns}[T]
@@ -444,6 +451,12 @@
       \includegraphics[width=\textwidth]{cm_roberta_6cl_optuna.png}
     \end{column}
   \end{columns}
+\end{frame}
+
+\begin{frame}{RoBERTa-large + Optuna (6kl) -- krzywe uczenia}
+  \begin{center}
+    \includegraphics[width=0.95\textwidth]{loss_roberta_6cl_optuna.png}
+  \end{center}
 \end{frame}
 
 \begin{frame}{Tryby promptingu + darmowe LLM z OpenRouter}
@@ -519,11 +532,11 @@
     \toprule
     Model & 2kl Acc & 2kl Macro-F1 & 6kl Acc & 6kl Macro-F1 \\
     \midrule
-    \multicolumn{5}{l}{\textbf{OpenRouter (darmowe)}} \\
+    \multicolumn{5}{l}{\textbf{OpenRouter}} \\
     gpt-oss-20b zero-shot                & 0{,}467 & 0{,}407 & --- & --- \\
     gpt-oss-20b few-shot                 & 0{,}500 & 0{,}467 & --- & --- \\
     \midrule
-    \multicolumn{5}{l}{\textbf{GPT (OpenAI, płatne)}} \\
+    \multicolumn{5}{l}{\textbf{GPT (OpenAI)}} \\
     GPT-4o-mini zero-shot                & 0{,}696 & 0{,}695 & 0{,}298 & 0{,}279 \\
     GPT-4o-mini few-shot                 & 0{,}693 & 0{,}686 & 0{,}324 & 0{,}310 \\
     GPT-4o zero-shot (SC=3, SO)          & \textbf{0{,}729} & \textbf{0{,}729} & --- & --- \\
@@ -600,16 +613,20 @@
     \toprule
     Kategoria & Model & 2kl Macro-F1 & 6kl Macro-F1 \\
     \midrule
-    Encoder       & RoBERTa-large (+ LIAR-PLUS na 6kl) & \textbf{0{,}728} & 0{,}341 \\
-    LLM płatny    & gpt-4o (SC=3, SO / few-shot)       & 0{,}729          & 0{,}356 \\
+    Encoder       & RoBERTa-large + Optuna             & 0{,}726          & \textbf{0{,}359} \\
+    LLM           & gpt-4o (SC=3, SO / few-shot)       & \textbf{0{,}729} & 0{,}356 \\
     \bottomrule
   \end{tabular}
   \end{center}
 
   \vspace{0.5em}
   \begin{itemize}
-    \item 2kl: \textbf{remis} -- RoBERTa-large $\approx$ gpt-4o (0{,}728 vs 0{,}729)
-    \item 6kl: \textbf{GPT-4o} (0{,}356) nieznacznie wyprzedza RoBERTa-large + LIAR-PLUS (0{,}341)
+    \item 2kl: \textbf{remis} -- RoBERTa-large $\approx$ gpt-4o
+    \item 6kl: \textbf{GPT-4o} nieznacznie wyprzedza RoBERTa-large
+    \item \emph{Uwaga:} gpt-4o na 6kl uruchomiony tylko w trybie \textbf{few-shot}
+          (zero-shot 6kl został przerwany przez limit API). W 2kl gpt-4o
+          zero-shot bił few-shot (0{,}729 vs 0{,}710), więc zakładamy że
+          analogicznie na 6kl zero-shot dałby wyższe wyniki niż few-shot.
   \end{itemize}
 \end{frame}
 
