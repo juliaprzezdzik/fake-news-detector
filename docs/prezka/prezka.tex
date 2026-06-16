@@ -336,7 +336,7 @@
 
       \textbf{Uzasadnienie użycia:} 50 kombinacji ręcznie = dni GPU; Optuna 20 prób = 2h.
 
-      \textbf{Efekt:} val F1 $0{,}71 \to \textbf{0{,}7435}$ (+3 pkt).
+      \textbf{Efekt:} val F1 od $0{,}681$ do $\textbf{0{,}726}$.
 
       \vspace{0.3em}
       \scriptsize
@@ -360,7 +360,7 @@
         class weights    & tak & tak \\
         patience         & 2 & 2 \\
         \midrule
-        \textbf{val F1}  & \textbf{0{,}7256} & \textbf{0{,}3520} \\
+        \textbf{val F1}  & \textbf{0{,}726} & \textbf{0{,}359} \\
         \bottomrule
       \end{tabular}
     \end{column}
@@ -395,16 +395,16 @@
         \toprule
          & precision & recall & f1-score & support \\
         \midrule
-        fake          & 0{,}733 & 0{,}629 & 0{,}677 & 553 \\
-        real          & 0{,}741 & 0{,}822 & 0{,}780 & 714 \\
+        fake          & 0{,}698 & 0{,}680 & 0{,}689 & 553 \\
+        real          & 0{,}757 & 0{,}772 & 0{,}764 & 714 \\
         \midrule
-        accuracy      &        &        & 0{,}738 & 1267 \\
-        macro avg     & 0{,}737 & 0{,}726 & 0{,}728 & 1267 \\
-        weighted avg  & 0{,}737 & 0{,}738 & 0{,}735 & 1267 \\
+        accuracy      &        &        & 0{,}732 & 1267 \\
+        macro avg     & 0{,}727 & 0{,}726 & 0{,}726 & 1267 \\
+        weighted avg  & 0{,}731 & 0{,}732 & 0{,}731 & 1267 \\
         \bottomrule
       \end{tabular}
       \end{center}
-      ROC AUC: 0{,}806\quad balanced acc: 0{,}726
+      ROC AUC: 0{,}788\quad balanced acc: 0{,}726
     \end{column}
     \begin{column}{0.45\textwidth}
       \centering
@@ -443,7 +443,7 @@
         \bottomrule
       \end{tabular}
       \end{center}
-      balanced acc: 0{,}356
+      balanced acc: 0{,}365
     \end{column}
     \begin{column}{0.45\textwidth}
       \centering
@@ -672,7 +672,7 @@
           (prawdziwość zależy od faktów o świecie, nie od wzorca)
     \item \textbf{Structured Outputs} -- musi być (z 11\% unparsed do 0\%)
     \item \textbf{Macro-F1, nie accuracy} -- niezbalansowane klasy
-    \item \textbf{Performance ceiling 6kl} ($\sim$0{,}32) przekroczyliśmy dzięki LIAR-PLUS
+    \item \textbf{Performance ceiling 6kl} ($\sim$0{,}32) przekroczyliśmy dzięki Optuna + wagi klas
   \end{itemize}
 \end{frame}
 
