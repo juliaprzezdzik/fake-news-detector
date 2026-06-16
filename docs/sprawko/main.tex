@@ -246,6 +246,102 @@ binarnym, a rysunek \ref{fig:results_6cl} -- na wariancie sześcioklasowym.
   \label{fig:results_6cl}
 \end{figure}
 
+\subsection{Zestawienie fine-tuningu (encoder)}\label{sec:encoder_summary}
+
+\begin{table}[h]
+\centering
+\caption{Porównanie modeli typu encoder fine-tuned na LIAR (zbiór testowy).
+BERT-base i RoBERTa-base trenowane były tylko w wariancie 2-klasowym.}
+\label{tab:encoder_summary}
+\begin{tabular}{lrrrr}
+\toprule
+Model & 2kl Acc & 2kl Macro-F1 & 6kl Acc & 6kl Macro-F1 \\
+\midrule
+BERT-base-uncased                & 0{,}628 & 0{,}604 & --- & --- \\
+RoBERTa-base                     & 0{,}640 & 0{,}622 & --- & --- \\
+\textbf{RoBERTa-large + Optuna}  & \textbf{0{,}731} & \textbf{0{,}726} & \textbf{0{,}357} & \textbf{0{,}359} \\
+\textbf{RoBERTa-large + LIAR-PLUS} & --- & --- & \textbf{0{,}383} & \textbf{0{,}380} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Najlepsze wyniki z każdej kategorii}\label{sec:best_of}
+
+\begin{table}[h]
+\centering
+\caption{Najlepsze wyniki z każdej kategorii modeli (macro-F1 na zbiorze testowym).}
+\label{tab:best_of}
+\begin{tabular}{llrr}
+\toprule
+Kategoria & Model & 2kl Macro-F1 & 6kl Macro-F1 \\
+\midrule
+Encoder (fine-tune) & RoBERTa-large + Optuna             & 0{,}726          & \textbf{0{,}359} \\
+LLM (OpenAI API)    & gpt-4o (SC=3, SO / few-shot)       & \textbf{0{,}729} & 0{,}356 \\
+LLM darmowy (OpenRouter) & gpt-oss-20b (few-shot)         & 0{,}467$^{*}$    & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+W wariancie binarnym wynik jest praktycznie remisem
+(RoBERTa-large 0{,}726 vs gpt-4o 0{,}729). W wariancie sześcioklasowym
+RoBERTa-large nieznacznie wyprzedza GPT-4o (0{,}359 vs 0{,}356).
+\\
+$^{*}$ Liczone na 120-przykładowym podzbiorze testowym (limity rate-limit
+darmowego OpenRouter), wynik niereprezentatywny dla pełnego zbioru.
+
+\emph{Uwaga:} gpt-4o na 6kl został uruchomiony tylko w trybie few-shot
+(zero-shot z $K=3$, $\text{SC}=3$, SO został przerwany przez błąd
+\texttt{insufficient\_quota}). Na 2kl zero-shot bił few-shot (0{,}729 vs
+0{,}710), więc zakładamy że analogicznie na 6kl zero-shot dałby
+nieznacznie wyższe wyniki niż few-shot.
+
+\subsection{Zestawienie wyników GPT (OpenAI API)}\label{sec:gpt_summary}
+
+Tabele \ref{tab:gpt_2cl} i \ref{tab:gpt_6cl} podsumowują wszystkie
+przeprowadzone eksperymenty GPT obok siebie. Pogrubione wiersze
+wskazują najlepszy wynik w każdym wariancie.
+
+\begin{table}[h]
+\centering
+\caption{Wyniki GPT na LIAR -- wariant binarny (2kl), zbiór testowy
+$\sim$1267. K = liczba przykładów per klasa w few-shot, SC =
+self-consistency, SO = Structured Outputs.}
+\label{tab:gpt_2cl}
+\begin{tabular}{llcccrr}
+\toprule
+Model & Tryb & K & SC & SO & Acc & Macro-F1 \\
+\midrule
+gpt-4o-mini & zero-shot      & -- & 1 & nie & 0{,}696 & 0{,}695 \\
+gpt-4o-mini & few-shot (kNN) & 1  & 1 & nie & 0{,}693 & 0{,}686 \\
+\textbf{gpt-4o} & \textbf{zero-shot} & \textbf{--} & \textbf{3} & \textbf{tak} & \textbf{0{,}729} & \textbf{0{,}729} \\
+gpt-4o      & few-shot (kNN) & 3  & 3 & tak & 0{,}710 & 0{,}709 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Wyniki GPT na LIAR -- wariant sześcioklasowy (6kl).}
+\label{tab:gpt_6cl}
+\begin{tabular}{llcccrr}
+\toprule
+Model & Tryb & K & SC & SO & Acc & Macro-F1 \\
+\midrule
+gpt-4o-mini & zero-shot      & -- & 1 & nie & 0{,}298 & 0{,}279 \\
+gpt-4o-mini & few-shot (kNN) & 1  & 1 & nie & 0{,}324 & 0{,}310 \\
+\textbf{gpt-4o} & \textbf{few-shot (kNN)} & \textbf{1}  & \textbf{1} & \textbf{tak} & \textbf{0{,}344} & \textbf{0{,}356} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Najlepszy 2kl: \texttt{gpt-4o zero-shot} z self-consistency 3 i
+Structured Outputs (acc=0{,}729, macro-F1=0{,}729, zero niesparowanych
+odpowiedzi). Najlepszy 6kl: \texttt{gpt-4o few-shot kNN} z $K=1$
+i $\text{SC}=1$ (acc=0{,}344, macro-F1=0{,}356). Eksperyment
+\texttt{gpt-4o 6kl zero-shot} z próby 2 ($K=3$, $\text{SC}=3$, SO)
+nie został doliczony -- wszystkie 1267 odpowiedzi zwróciły błąd
+\texttt{insufficient\_quota} z OpenAI API.
+
 \subsection{Szczegółowe wyniki GPT-4o-mini (1 próba)}
 
 Poniższe metryki pochodzą z pojedynczego uruchomienia całego pipeline'u
@@ -391,8 +487,7 @@ identyfikowalne.
 
 \subsection{RoBERTa-large + LIAR-PLUS (justification)}\label{sec:liarplus}
 
-W celu przebicia tzw. \emph{performance ceiling} 0{,}32 (sekcja
-\ref{tab:liar_ceiling}) zastosowaliśmy rozszerzoną wersję datasetu --
+W celu poprawy wyników w wariancie 6-klasowym zastosowaliśmy rozszerzoną wersję datasetu --
 LIAR-PLUS \cite{alhindi2018} -- która dodaje do każdej wypowiedzi pole
 \texttt{justification} zawierające kilka zdań uzasadnienia napisane przez
 fact-checkerów PolitiFact. Tekst wejściowy modelu został wzbogacony o
@@ -425,52 +520,68 @@ predykcji nad pojedynczymi klasami -- recall jest teraz bardziej
 zrównoważony (0{,}26--0{,}49 dla każdej klasy), zamiast skupiać się na
 2-3 najczęstszych.
 
-\subsection{Próba 3 -- Qwen 2.5 3B Instruct (open-source LLM, zero-shot)}
+\subsection{Open-source LLM przez OpenRouter}\label{sec:openrouter}
 
-Jako dodatkowy baseline porównawczy zastosowano model open-source
-\texttt{Qwen/Qwen2.5-3B-Instruct} (3 mld parametrów, dekoder-only).
-Inferencja przeprowadzona lokalnie na GPU T4 (Kaggle), z deterministycznym
-generowaniem (\texttt{do\_sample=False}, max\_new\_tokens=8), w trybie
-zero-shot z anglojęzycznym promptem.
+Jako dodatkowy baseline przetestowano darmowe modele open-source przez
+platformę \href{https://openrouter.ai}{OpenRouter}: \texttt{gpt-oss-20b},
+\texttt{gemma-4-31b-it}, \texttt{dolphin-mistral-24b-venice-edition},
+\texttt{llama-3.3-70b-instruct}. Wszystkie to dekoder-only Transformery
+różnej wielkości (20--70 mld parametrów).
 
-\textbf{2kl zero-shot} (acc=0{,}564, macro-F1=0{,}559, unparsed=33, support=1234):
-\begin{center}
-\begin{tabular}{lrrrr}
+\paragraph{Realne wyniki tylko dla gpt-oss-20b.} Limity dziennego użycia
+darmowego planu OpenRouter (50 zapytań/dzień bez doładowania) przerwały
+runy gemmy, dolphina i llamy -- wszystkie zwracały \texttt{ERROR\_STATUS\_429}
+i fallback parsera przypisywał odpowiedzi do klasy \texttt{fake},
+dając niereprezentatywne 0{,}442/0{,}306. Tylko gpt-oss-20b zdążył odpowiedzieć
+na pełne 120 próbek przed limitem.
+
+\begin{table}[h]
+\centering
+\caption{Wyniki gpt-oss-20b (OpenRouter) na 120-przykładowym podzbiorze
+testowym LIAR (2kl).}
+\label{tab:openrouter}
+\begin{tabular}{lrrr}
 \toprule
- & precision & recall & f1-score & support \\
+Tryb & Accuracy & Macro-F1 & Unparsed \\
 \midrule
-fake & 0{,}50 & 0{,}76 & 0{,}60 & 538 \\
-real & 0{,}69 & 0{,}41 & 0{,}51 & 696 \\
+zero-shot & 0{,}467 & 0{,}407 & 48 / 120 \\
+few-shot  & 0{,}500 & 0{,}467 &  0 / 120 \\
 \bottomrule
 \end{tabular}
-\end{center}
+\end{table}
 
-\textbf{6kl zero-shot} (acc=0{,}196, macro-F1=0{,}154, unparsed=45, support=1222):
-\begin{center}
-\begin{tabular}{lrrrr}
+Słabsze wyniki niż gpt-4o wynikają z trzech czynników: (1) mniejszy model
+(20B vs $\sim$200B), (2) brak Structured Outputs -- parser musi szukać
+\texttt{fake}/\texttt{true} w surowym tekście, (3) tryb \emph{reasoning}
+modelu gpt-oss generuje wewnętrzny łańcuch rozumowania, który przy
+\texttt{max\_tokens=8} bywa ucinany przed właściwą etykietą.
+
+\subsection{Porównanie gpt-4o vs gpt-4o-mini}\label{sec:gpt4o_compare}
+
+\begin{table}[h]
+\centering
+\caption{Architektura i cennik dwóch modeli OpenAI używanych w
+eksperymentach. Wielkość i architektura niepublikowane przez OpenAI --
+podane wartości to publiczne szacunki.}
+\label{tab:gpt4o_vs_mini}
+\begin{tabular}{lll}
 \toprule
- & precision & recall & f1-score & support \\
+ & \textbf{gpt-4o-mini} & \textbf{gpt-4o} \\
 \midrule
-pants-fire   & 0{,}16 & 0{,}72 & 0{,}26 &  90 \\
-false        & 0{,}22 & 0{,}50 & 0{,}30 & 241 \\
-barely-true  & 0{,}12 & 0{,}09 & 0{,}10 & 208 \\
-half-true    & 1{,}00 & 0{,}00 & 0{,}01 & 249 \\
-mostly-true  & 0{,}29 & 0{,}09 & 0{,}14 & 233 \\
-true         & 0{,}37 & 0{,}07 & 0{,}11 & 201 \\
+Wielkość       & $\sim$8 mld par. & $\sim$200 mld par. \\
+Cena (input)   & \$0{,}15 / 1M tok. & \$2{,}50 / 1M tok. \\
+Cena (output)  & \$0{,}60 / 1M tok. & \$10 / 1M tok. \\
+Szybkość       & $\sim$2$\times$ szybszy & wolniejszy \\
+Jakość         & słabszy w trudnych zadaniach & flagowy \\
 \bottomrule
 \end{tabular}
-\end{center}
+\end{table}
 
-\textit{Obserwacje:} Qwen 2.5 3B osiąga wyraźnie słabsze wyniki niż
-modele OpenAI (gpt-4o-mini, gpt-4o) oraz fine-tuned RoBERTa-large --
-zgodnie z oczekiwaniem dla modelu 10$\times$ mniejszego od GPT i 3$\times$
-większego, ale niefinetunowanego, w porównaniu do RoBERTy. Model
-ma silną tendencję do nadmiernego predykowania klas skrajnych
-(\texttt{pants-fire}, \texttt{false}) oraz prawie nigdy nie wybiera klasy
-\texttt{half-true} (recall=0{,}004). Qwen 3B służy więc jako dolne
-ograniczenie (\emph{lower bound}) dla podejścia open-source-LLM bez
-fine-tuningu, pokazując, że na zadaniu LIAR sama skala modelu i jakość
-pretreningu OpenAI mają znaczenie.
+W naszym pipeline gpt-4o-mini użyty jako tani baseline (0{,}15\$/1M
+tokenów to $\sim$17$\times$ taniej niż gpt-4o), gpt-4o jako model główny
+do uzyskania najlepszych wyników. W praktyce gpt-4o przewyższa
+gpt-4o-mini o 3--4 punkty macro-F1 na 2kl (0{,}729 vs 0{,}695) i
+4--5 punkty na 6kl (0{,}356 vs 0{,}310).
 
 \subsection{Czas wykonania}
 
@@ -566,8 +677,8 @@ nieusuwalnej dwuznaczności semantycznej -- klasy \texttt{half-true} i
 \texttt{mostly-true} wymagają zewnętrznej wiedzy o świecie i często nie są
 rozróżnialne nawet dla ludzkiego anotatora. Nasze wyniki (RoBERTa-large
 6kl: 0{,}357, RoBERTa-large + LIAR-PLUS 6kl: 0{,}383, GPT-4o few-shot:
-0{,}344) wyraźnie przewyższają referencyjny benchmark z oryginalnej
-publikacji.
+0{,}344) mieszczą się w zakresie raportowanym w nowszej literaturze
+na tym zadaniu.
 
 Systematyczny przegląd literatury~\cite{emergentmind} potwierdza istnienie
 \emph{performance ceiling} na poziomie $\sim$0{,}32 dla klasyfikacji
@@ -603,9 +714,9 @@ artifacts rather than transferability''}. Co więcej, modele drzewiaste
 przy treningu osiągają $\sim$99\% accuracy na zbiorze treningowym, ale
 zaledwie $\sim$25\% na zbiorze testowym -- klasyczny obraz uczenia się
 płytkich, leksykalnych wzorców zamiast prawdziwej wiedzy faktograficznej.
-Nasza RoBERTa-large 2kl (0{,}738) wyraźnie przebija barierę 0{,}62
-raportowaną w literaturze, a GPT-4o 6kl (0{,}344) -- przekracza sufit
-0{,}32.
+Nasze wyniki -- RoBERTa-large 2kl (0{,}738) oraz GPT-4o 6kl (0{,}344) --
+sytuują się w górnej części zakresu raportowanego w literaturze dla tego
+zbioru.
 
 Co więcej, sami fact-checkerzy PolitiFact -- tworzący etykiety dla zbioru
 LIAR -- regularnie nie zgadzają się ze sobą przy przypisywaniu jednej z
@@ -693,6 +804,18 @@ jest spójna z ogólnym obserwowaniem, że większe modele wykazują lepszą
   \item Wagi klas i Structured Outputs to dwie najistotniejsze poprawki
         techniczne, które dają mierzalny zysk małym kosztem implementacyjnym.
 \end{enumerate}
+
+\section{Możliwości dalszego rozwoju}
+
+Naturalnym kierunkiem rozwoju jest \textbf{klasyfikacja kaskadowa}:
+najpierw model binarny rozstrzyga, czy wypowiedź jest \texttt{fake} czy
+\texttt{real}, a następnie -- w obrębie każdej z dwóch grup -- drugi
+model przypisuje jedną z trzech oryginalnych etykiet LIAR
+(\texttt{pants-fire}/\texttt{false}/\texttt{barely-true} po stronie fake;
+\texttt{half-true}/\texttt{mostly-true}/\texttt{true} po stronie real).
+Pozwala to każdemu modelowi specjalizować się w prostszym zadaniu i
+może ograniczyć błędy między bliskimi semantycznie klasami
+(np. \texttt{half-true} vs \texttt{mostly-true}).
 
 \begin{thebibliography}{9}
   \bibitem{wang2017}
