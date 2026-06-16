@@ -7,6 +7,21 @@
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{graphicx}
+\usepackage{xcolor}
+
+% Pastelowy blekitny motyw kolorystyczny
+\definecolor{mypaleblue}{RGB}{180,205,225}
+\definecolor{mypaleblue2}{RGB}{155,185,210}
+\definecolor{mydarkblue}{RGB}{60,90,130}
+
+\setbeamercolor{structure}{fg=mydarkblue}
+\setbeamercolor{frametitle}{bg=mypaleblue, fg=mydarkblue}
+\setbeamercolor{title}{bg=mypaleblue, fg=mydarkblue}
+\setbeamercolor{title in head/foot}{bg=mypaleblue2, fg=mydarkblue}
+\setbeamercolor{author in head/foot}{bg=mypaleblue, fg=mydarkblue}
+\setbeamercolor{date in head/foot}{bg=mypaleblue2, fg=mydarkblue}
+\setbeamercolor{section in head/foot}{bg=mypaleblue, fg=mydarkblue}
+\setbeamercolor{block title}{bg=mypaleblue, fg=mydarkblue}
 
 \title{Wykrywanie fake news}
 \subtitle{Porównanie modeli językowych na zbiorze LIAR}
@@ -333,7 +348,7 @@
     \begin{column}{0.45\textwidth}
       \small
       \centering
-      \textbf{Best params (2kl):}
+      \textbf{Best params:}
       \vspace{0.3em}
       \begin{tabular}{lr}
         \toprule
@@ -344,7 +359,7 @@
         epochs        & 5 \\
         batch size    & 8 \\
         \midrule
-        \textbf{val F1} & \textbf{0{,}7435} \\
+        \textbf{val F1} & \textbf{0{,}7370} \\
         \bottomrule
       \end{tabular}
     \end{column}
@@ -362,12 +377,73 @@
     \midrule
     BERT-base-uncased                    & 0{,}628 & 0{,}604 & --- & --- \\
     RoBERTa-base                         & 0{,}640 & 0{,}622 & --- & --- \\
-    \textbf{RoBERTa-large baseline}      & \textbf{0{,}738} & \textbf{0{,}728} & --- & --- \\
-    RoBERTa-large + Optuna               & --- & --- & 0{,}357 & 0{,}359 \\
+    \textbf{RoBERTa-large + Optuna}      & \textbf{0{,}738} & \textbf{0{,}728} & \textbf{0{,}357} & \textbf{0{,}359} \\
     RoBERTa-large + LIAR-PLUS            & --- & --- & 0{,}355 & 0{,}341 \\
     \bottomrule
   \end{tabular}
   \end{center}
+\end{frame}
+
+\begin{frame}{Najlepszy wynik RoBERTa-large + Optuna (2kl)}
+  \scriptsize
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \textbf{Classification report:}
+      \begin{center}
+      \begin{tabular}{lrrrr}
+        \toprule
+         & precision & recall & f1-score & support \\
+        \midrule
+        fake          & 0{,}733 & 0{,}629 & 0{,}677 & 553 \\
+        real          & 0{,}741 & 0{,}822 & 0{,}780 & 714 \\
+        \midrule
+        accuracy      &        &        & 0{,}738 & 1267 \\
+        macro avg     & 0{,}737 & 0{,}726 & 0{,}728 & 1267 \\
+        weighted avg  & 0{,}737 & 0{,}738 & 0{,}735 & 1267 \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      ROC AUC: 0{,}806\quad balanced acc: 0{,}726
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \centering
+      \textbf{Macierz pomyłek:}\\[2pt]
+      \includegraphics[width=\textwidth]{cm_roberta_2cl_baseline.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Najlepszy wynik RoBERTa-large + Optuna (6kl)}
+  \scriptsize
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \textbf{Classification report:}
+      \begin{center}
+      \begin{tabular}{lrrrr}
+        \toprule
+         & precision & recall & f1-score & support \\
+        \midrule
+        pants-fire    & 0{,}423 & 0{,}359 & 0{,}388 & 92 \\
+        false         & 0{,}490 & 0{,}406 & 0{,}444 & 249 \\
+        barely-true   & 0{,}253 & 0{,}236 & 0{,}244 & 212 \\
+        half-true     & 0{,}348 & 0{,}328 & 0{,}338 & 265 \\
+        mostly-true   & 0{,}331 & 0{,}382 & 0{,}355 & 241 \\
+        true          & 0{,}346 & 0{,}428 & 0{,}383 & 208 \\
+        \midrule
+        accuracy      &        &        & 0{,}357 & 1267 \\
+        macro avg     & 0{,}365 & 0{,}356 & 0{,}359 & 1267 \\
+        weighted avg  & 0{,}362 & 0{,}357 & 0{,}357 & 1267 \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      balanced acc: 0{,}356
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \centering
+      \textbf{Macierz pomyłek:}\\[2pt]
+      \includegraphics[width=\textwidth]{cm_roberta_6cl_optuna.png}
+    \end{column}
+  \end{columns}
 \end{frame}
 
 \begin{frame}{Tryby promptingu + darmowe LLM z OpenRouter}
@@ -457,6 +533,66 @@
   \end{center}
 \end{frame}
 
+\begin{frame}{Najlepszy wynik GPT-4o (2kl zero-shot, SC=3, SO)}
+  \scriptsize
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \textbf{Classification report:}
+      \begin{center}
+      \begin{tabular}{lrrrr}
+        \toprule
+         & precision & recall & f1-score & support \\
+        \midrule
+        fake          & 0{,}66 & 0{,}78 & 0{,}71 & 553 \\
+        real          & 0{,}80 & 0{,}69 & 0{,}74 & 714 \\
+        \midrule
+        accuracy      &        &        & 0{,}73 & 1267 \\
+        macro avg     & 0{,}73 & 0{,}73 & 0{,}73 & 1267 \\
+        weighted avg  & 0{,}74 & 0{,}73 & 0{,}73 & 1267 \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \centering
+      \textbf{Macierz pomyłek:}\\[2pt]
+      \includegraphics[width=\textwidth]{cm_gpt4o_2cl_zero_sc3_so.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Najlepszy wynik GPT-4o (6kl few-shot, K=1, SO)}
+  \scriptsize
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \textbf{Classification report:}
+      \begin{center}
+      \begin{tabular}{lrrrr}
+        \toprule
+         & precision & recall & f1-score & support \\
+        \midrule
+        pants-fire    & 0{,}72 & 0{,}36 & 0{,}48 & 91 \\
+        false         & 0{,}34 & 0{,}48 & 0{,}40 & 244 \\
+        barely-true   & 0{,}26 & 0{,}40 & 0{,}32 & 211 \\
+        half-true     & 0{,}28 & 0{,}36 & 0{,}32 & 263 \\
+        mostly-true   & 0{,}44 & 0{,}15 & 0{,}22 & 239 \\
+        true          & 0{,}51 & 0{,}32 & 0{,}39 & 206 \\
+        \midrule
+        accuracy      &        &        & 0{,}34 & 1254 \\
+        macro avg     & 0{,}43 & 0{,}35 & 0{,}36 & 1254 \\
+        weighted avg  & 0{,}39 & 0{,}34 & 0{,}34 & 1254 \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \centering
+      \textbf{Macierz pomyłek:}\\[2pt]
+      \includegraphics[width=\textwidth]{cm_gpt4o_6cl_fewshot.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{Najlepsze wyniki z każdej kategorii}
   \small
   \begin{center}
@@ -520,6 +656,21 @@
     \item \textbf{Structured Outputs} -- musi być (z 11\% unparsed do 0\%)
     \item \textbf{Macro-F1, nie accuracy} -- niezbalansowane klasy
     \item \textbf{Performance ceiling 6kl} ($\sim$0{,}32) przekroczyliśmy dzięki LIAR-PLUS
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Możliwości dalszego rozwoju}
+  \begin{itemize}
+    \item \textbf{Klasyfikacja kaskadowa} -- RoBERTa najpierw rozstrzyga 2 klasy
+          (fake/real), potem w obrębie każdej grupy drugi model przypisuje
+          jedną z trzech oryginalnych etykiet LIAR. Każdy model specjalizuje
+          się w prostszym zadaniu.
+    \item \textbf{Porównanie różnych kombinacji preprocessingu} -- ablacja
+          poszczególnych kroków (lowercase, URL, interpunkcja, kontekst mówcy,
+          \texttt{max\_length}) i ich wpływu na wyniki.
+    \item \textbf{Porównanie wersji zbioru LIAR} -- LIAR vs. LIAR-PLUS vs.
+          LIAR2 vs. LIAR-RAW. Każdy daje inny zakres metadanych i może
+          poprawić wyniki, szczególnie w wariancie 6-klasowym.
   \end{itemize}
 \end{frame}
 
